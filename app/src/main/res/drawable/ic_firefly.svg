@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <!-- Glow / aura around the tail -->
+  <path fill="#80FFEB3B" d="M24,38 C28,38 31,35 31,31 C31,27 28,24 24,24 C20,24 17,27 17,31 C17,35 20,38 24,38Z"/>
+  <!-- Body -->
+  <path fill="#455A64" d="M24,12 C21,12 19,14 19,16 L19,24 C19,24 21,26 24,26 C27,26 29,24 29,24 L29,16 C29,14 27,12 24,12Z"/>
+  <!-- Glowing tail -->
+  <path fill="#FFEB3B" d="M24,26 C21.5,26 20,28 20,30 C20,33 22,35 24,35 C26,35 28,33 28,30 C28,28 26.5,26 24,26Z"/>
+  <!-- Head -->
+  <path fill="#37474F" d="M24,9 C22,9 20.5,10.5 20.5,12 C20.5,13 21,13.5 24,13.5 C27,13.5 27.5,13 27.5,12 C27.5,10.5 26,9 24,9Z"/>
+  <!-- Left wing -->
+  <path fill="#78909C" d="M19,16 Q12,12 10,18 Q12,22 19,20Z"/>
+  <!-- Right wing -->
+  <path fill="#78909C" d="M29,16 Q36,12 38,18 Q36,22 29,20Z"/>
+  <!-- Left antenna -->
+  <path stroke="#455A64" stroke-width="1.2" fill="none" d="M22,10 Q19,5 17,6"/>
+  <!-- Right antenna -->
+  <path stroke="#455A64" stroke-width="1.2" fill="none" d="M26,10 Q29,5 31,6"/>
+  <!-- Antenna dots -->
+  <circle cx="17" cy="5.5" r="1.2" fill="#455A64"/>
+  <circle cx="31" cy="5.5" r="1.2" fill="#455A64"/>
+  <!-- Tail glow highlight -->
+  <circle cx="23" cy="28.5" r="2" fill="#FFF176"/>
+</svg>

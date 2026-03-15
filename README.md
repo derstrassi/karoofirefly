@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="app/src/main/res/drawable/ic_firefly.svg" width="96" height="96" alt="KarooFireFly icon">
+</p>
+
 # KarooFireFly
 
 ANT+ Smart Bike Light Controller extension for Hammerhead Karoo 3.
