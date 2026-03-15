@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Glow / aura around the tail -->
+    <path
+        android:fillColor="#80FFEB3B"
+        android:pathData="M24,38 C28,38 31,35 31,31 C31,27 28,24 24,24 C20,24 17,27 17,31 C17,35 20,38 24,38Z" />
+
+    <!-- Body -->
+    <path
+        android:fillColor="#455A64"
+        android:pathData="M24,12 C21,12 19,14 19,16 L19,24 C19,24 21,26 24,26 C27,26 29,24 29,24 L29,16 C29,14 27,12 24,12Z" />
+
+    <!-- Glowing tail -->
+    <path
+        android:fillColor="#FFEB3B"
+        android:pathData="M24,26 C21.5,26 20,28 20,30 C20,33 22,35 24,35 C26,35 28,33 28,30 C28,28 26.5,26 24,26Z" />
+
+    <!-- Head -->
+    <path
+        android:fillColor="#37474F"
+        android:pathData="M24,9 C22,9 20.5,10.5 20.5,12 C20.5,13 21,13.5 24,13.5 C27,13.5 27.5,13 27.5,12 C27.5,10.5 26,9 24,9Z" />
+
+    <!-- Left wing -->
+    <path
+        android:fillColor="#78909C"
+        android:pathData="M19,16 Q12,12 10,18 Q12,22 19,20Z" />
+
+    <!-- Right wing -->
+    <path
+        android:fillColor="#78909C"
+        android:pathData="M29,16 Q36,12 38,18 Q36,22 29,20Z" />
+
+    <!-- Left antenna -->
+    <path
+        android:strokeColor="#455A64"
+        android:strokeWidth="1.2"
+        android:fillColor="#00000000"
+        android:pathData="M22,10 Q19,5 17,6" />
+
+    <!-- Right antenna -->
+    <path
+        android:strokeColor="#455A64"
+        android:strokeWidth="1.2"
+        android:fillColor="#00000000"
+        android:pathData="M26,10 Q29,5 31,6" />
+
+    <!-- Antenna dots -->
+    <path
+        android:fillColor="#455A64"
+        android:pathData="M17,5.5 a1.2,1.2 0 1,1 0,0.01Z" />
+    <path
+        android:fillColor="#455A64"
+        android:pathData="M31,5.5 a1.2,1.2 0 1,1 0,0.01Z" />
+
+    <!-- Tail glow highlight -->
+    <path
+        android:fillColor="#FFF176"
+        android:pathData="M23,28.5 a2,2 0 1,1 0,0.01Z" />
+</vector>
