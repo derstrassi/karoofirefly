@@ -22,9 +22,10 @@ Controls ANT+ bike lights paired through Karoo's native sensor settings. Unlike 
 - Uses Karoo-paired lights — no separate pairing needed
 
 **Planned / Not yet implemented:**
-- BonusActions for manual toggle/mode cycle (mapped to hardware buttons)
 - Graphical data field showing light status on the ride screen
 - Support for separate front and rear light profiles (currently sends same mode to all lights)
+- Ambient light sensor based mode switching
+- Surface type / road / off-road / GPS based mode switching
 
 ## How It Works
 
