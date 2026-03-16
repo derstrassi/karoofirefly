@@ -6,22 +6,31 @@
 
 ANT+ Smart Bike Light Controller extension for Hammerhead Karoo 3.
 
+> **Early Development / Use at Your Own Risk**
+>
+> This extension is in early development and has only been tested with a **Magene L508** rear light on a Karoo 3. Other ANT+ lights (Garmin Varia, Bontrager Ion/Flare, etc.) should work but are untested. The extension uses an undocumented internal Karoo API that may break with firmware updates. Use at your own risk.
+
 ## Overview
 
-Intelligently controls ANT+ bike lights (Garmin Varia, Bontrager Ion/Flare, Magene L508, etc.) — unlike Karoo's native light support which only does basic on/off at ride start/stop.
+Controls ANT+ bike lights paired through Karoo's native sensor settings. Unlike Karoo's built-in light support which only toggles on/off at ride start/stop, KarooFireFly sets specific light modes based on time of day.
 
-**Features:**
-- Time-based mode switching (day: flash, dusk: steady, night: full brightness)
-- BonusActions for manual toggle/mode cycle (mappable to hardware buttons)
-- Graphical data field showing light status on the ride screen
-- Auto on/off with ride start/stop
+**What works:**
+- Automatic light mode switching based on time of day (sunrise/sunset calculation)
+- Auto on with ride start, auto off with ride stop
+- Configurable light profiles per time zone (day / dusk / night)
+- Configurable dawn/dusk time offsets
 - Uses Karoo-paired lights — no separate pairing needed
+
+**Planned / Not yet implemented:**
+- BonusActions for manual toggle/mode cycle (mapped to hardware buttons)
+- Graphical data field showing light status on the ride screen
+- Support for separate front and rear light profiles (currently sends same mode to all lights)
 
 ## How It Works
 
 Pair your ANT+ lights through **Karoo's native sensor settings** (Settings > Sensors). When a ride starts, KarooFireFly automatically discovers the paired lights and controls their mode through Karoo's internal SensorService. No pairing UI in the extension — just configure your light profiles and time offsets.
 
-The extension communicates with Karoo's SensorService via its internal AIDL interface (`LightCommandConnectionAIDL`) to send light mode commands. This means the extension works with whatever lights Karoo has already paired and connected — no need for separate ANT+ channel management.
+The extension communicates with Karoo's SensorService via its internal AIDL interface to send light mode commands. This means the extension works with whatever lights Karoo has already paired and connected — no need for separate ANT+ channel management.
 
 ## Architecture
 
