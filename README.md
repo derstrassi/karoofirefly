@@ -20,6 +20,9 @@ Controls ANT+ bike lights paired through Karoo's native sensor settings. Unlike 
 - Configurable light profiles per time zone (day / dusk / night)
 - Configurable dawn/dusk time offsets
 - Uses Karoo-paired lights — no separate pairing needed
+- BonusActions mappable to AXS shift buttons or Karoo hardware buttons:
+  - **Toggle Lights** — turns all lights on/off
+  - **Cycle Mode** — cycles through modes (Off → High → Medium → Low → Slow Flash → Fast Flash → ...)
 
 **Planned / Not yet implemented:**
 - Graphical data field showing light status on the ride screen
