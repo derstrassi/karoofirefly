@@ -22,6 +22,12 @@ enum class DayTimeZone {
     NIGHT,
 }
 
+enum class LightControlMode {
+    TIME_BASED,
+    AMBIENT_LIGHT,
+    COMBINED,
+}
+
 /**
  * Stored settings for the extension.
  */
@@ -32,4 +38,14 @@ data class LightControllerSettings(
     val autoOnWithRide: Boolean = true,
     val autoOffWithRide: Boolean = true,
     val profile: LightProfile = LightProfile(),
-)
+    val lightControlMode: String = "TIME_BASED",
+    val ambientDarkThreshold: Int = 50,
+    val ambientDimThreshold: Int = 200,
+) {
+    val controlMode: LightControlMode
+        get() = try {
+            LightControlMode.valueOf(lightControlMode)
+        } catch (_: IllegalArgumentException) {
+            LightControlMode.TIME_BASED
+        }
+}

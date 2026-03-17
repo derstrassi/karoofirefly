@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import io.github.derstrassi.karoofirefly.data.LightControllerSettings
 import io.github.derstrassi.karoofirefly.data.PreferencesRepository
+import io.github.derstrassi.karoofirefly.engine.AmbientLightSensor
 import io.github.derstrassi.karoofirefly.ui.screens.LightProfileScreen
 import io.github.derstrassi.karoofirefly.ui.screens.SettingsScreen
 import io.github.derstrassi.karoofirefly.ui.theme.AppTheme
@@ -19,6 +20,8 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
 
     private lateinit var repository: PreferencesRepository
+    private lateinit var luxSensor: AmbientLightSensor
+    private var ownsLuxSensor = false
 
     private enum class Screen { SETTINGS, PROFILES }
 
@@ -26,15 +29,26 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         repository = PreferencesRepository(applicationContext)
+        val extSensor = KarooLightControllerExtension.getInstance()?.ambientLightSensor
+        if (extSensor != null) {
+            luxSensor = extSensor
+        } else {
+            luxSensor = AmbientLightSensor(applicationContext)
+            ownsLuxSensor = true
+        }
+        luxSensor.start()
 
         setContent {
             AppTheme {
                 val settings by repository.settingsFlow.collectAsState(initial = LightControllerSettings())
                 var currentScreen by remember { mutableStateOf(Screen.SETTINGS) }
 
+                val luxValue by luxSensor.currentLux.collectAsState()
+
                 when (currentScreen) {
                     Screen.SETTINGS -> SettingsScreen(
                         settings = settings,
+                        currentLux = luxValue,
                         onSave = { newSettings ->
                             lifecycleScope.launch {
                                 repository.updateSettings(newSettings)
@@ -42,10 +56,14 @@ class MainActivity : ComponentActivity() {
                                     ext.engine.settings = newSettings
                                     ext.timeController.dawnOffsetMinutes = newSettings.dawnOffsetMinutes
                                     ext.timeController.duskOffsetMinutes = newSettings.duskOffsetMinutes
+                                    ext.engine.updateAmbientSensor()
                                 }
                             }
                         },
                         onNavigateToProfiles = { currentScreen = Screen.PROFILES },
+                        onDebugToggle = { enabled ->
+                            KarooLightControllerExtension.getInstance()?.engine?.setDebugMode(enabled)
+                        },
                     )
                     Screen.PROFILES -> LightProfileScreen(
                         profile = settings.profile,
@@ -63,5 +81,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        if (ownsLuxSensor) {
+            luxSensor.stop()
+        }
+        super.onDestroy()
     }
 }

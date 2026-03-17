@@ -2,6 +2,7 @@ package io.github.derstrassi.karoofirefly.engine
 
 import io.github.derstrassi.karoofirefly.ant.LightMode
 import io.github.derstrassi.karoofirefly.data.DayTimeZone
+import io.github.derstrassi.karoofirefly.data.LightControlMode
 import io.github.derstrassi.karoofirefly.data.LightControllerSettings
 import io.github.derstrassi.karoofirefly.data.LightProfile
 import kotlinx.coroutines.CoroutineScope
@@ -12,6 +13,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -25,6 +27,7 @@ import timber.log.Timber
  */
 class LightControlEngine(
     private val timeController: TimeBasedController,
+    private val ambientLightSensor: AmbientLightSensor? = null,
 ) {
     companion object {
         const val MANUAL_OVERRIDE_DURATION_MS = 60_000L
@@ -43,6 +46,7 @@ class LightControlEngine(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var zoneCheckJob: Job? = null
+    private var sensorObserveJob: Job? = null
     private var manualOverrideJob: Job? = null
 
     private val _state = MutableStateFlow(EngineState.IDLE)
@@ -63,7 +67,7 @@ class LightControlEngine(
         Timber.d("LightControlEngine: ride started")
         if (settings.autoOnWithRide) {
             _state.value = EngineState.AUTO_CONTROL
-            applyTimeBasedMode()
+            applyAutoMode()
             startZoneChecking()
         }
     }
@@ -88,7 +92,7 @@ class LightControlEngine(
         if (_currentFrontMode.value != LightMode.OFF || _currentRearMode.value != LightMode.OFF) {
             setModes(LightMode.OFF, LightMode.OFF)
         } else {
-            val zone = timeController.getCurrentZone()
+            val zone = determineCurrentZone()
             val (front, rear) = getModesForZone(zone, settings.profile)
             setModes(
                 LightMode.fromModeNumber(front) ?: LightMode.OFF,
@@ -107,10 +111,10 @@ class LightControlEngine(
         startManualOverrideTimer()
     }
 
-    private fun applyTimeBasedMode() {
+    private fun applyAutoMode() {
         if (_state.value == EngineState.MANUAL_OVERRIDE) return
 
-        val zone = timeController.getCurrentZone()
+        val zone = determineCurrentZone()
         val previousZone = _currentZone.value
         if (zone == previousZone && _currentFrontMode.value != LightMode.OFF) return
 
@@ -123,6 +127,82 @@ class LightControlEngine(
 
         if (zone != previousZone) {
             Timber.d("Zone: $previousZone → $zone (front=${front.karooModeName}, rear=${rear.karooModeName})")
+        }
+    }
+
+    /**
+     * Determines the current zone based on the configured control mode.
+     *
+     * - TIME_BASED: uses sunrise/sunset only
+     * - AMBIENT_LIGHT: uses the light sensor only
+     * - COMBINED: time-based as baseline, sensor can darken but not brighten
+     *   (e.g. tunnel during DAY → NIGHT, but headlights at NIGHT stay NIGHT)
+     */
+    private fun determineCurrentZone(): DayTimeZone {
+        return when (settings.controlMode) {
+            LightControlMode.TIME_BASED -> timeController.getCurrentZone()
+            LightControlMode.AMBIENT_LIGHT -> {
+                ambientLightSensor?.currentLightZone?.value ?: timeController.getCurrentZone()
+            }
+            LightControlMode.COMBINED -> {
+                val timeZone = timeController.getCurrentZone()
+                val sensorZone = ambientLightSensor?.currentLightZone?.value ?: timeZone
+                // Sensor can only darken (make zone "worse"), never brighten
+                if (sensorZone.ordinal > timeZone.ordinal) sensorZone else timeZone
+            }
+        }
+    }
+
+    /**
+     * Start or stop the ambient light sensor based on the current control mode.
+     * Called when settings change — the sensor runs continuously when needed,
+     * independent of ride state (TYPE_LIGHT is extremely low-power).
+     */
+    fun updateAmbientSensor() {
+        ambientLightSensor?.let {
+            if (settings.controlMode != LightControlMode.TIME_BASED) {
+                it.darkThreshold = settings.ambientDarkThreshold
+                it.dimThreshold = settings.ambientDimThreshold
+                it.start()
+                startSensorObserving()
+            } else {
+                it.stop()
+                stopSensorObserving()
+            }
+        }
+    }
+
+    private fun startSensorObserving() {
+        if (sensorObserveJob != null) return
+        sensorObserveJob = scope.launch {
+            ambientLightSensor?.currentLightZone?.collectLatest {
+                if (_state.value == EngineState.AUTO_CONTROL) {
+                    applyAutoMode()
+                }
+            }
+        }
+    }
+
+    private fun stopSensorObserving() {
+        sensorObserveJob?.cancel()
+        sensorObserveJob = null
+    }
+
+    /**
+     * Enable or disable debug mode. When enabled, the engine enters AUTO_CONTROL
+     * and starts zone checking without requiring an active ride.
+     */
+    fun setDebugMode(enabled: Boolean) {
+        if (enabled) {
+            Timber.d("LightControlEngine: debug mode ON")
+            _state.value = EngineState.AUTO_CONTROL
+            applyAutoMode()
+            startZoneChecking()
+        } else {
+            Timber.d("LightControlEngine: debug mode OFF")
+            stopZoneChecking()
+            _state.value = EngineState.IDLE
+            setModes(LightMode.OFF, LightMode.OFF)
         }
     }
 
@@ -146,7 +226,7 @@ class LightControlEngine(
             while (true) {
                 delay(ZONE_CHECK_INTERVAL_MS)
                 if (_state.value == EngineState.AUTO_CONTROL) {
-                    applyTimeBasedMode()
+                    applyAutoMode()
                 }
             }
         }
@@ -164,14 +244,16 @@ class LightControlEngine(
             if (_state.value == EngineState.MANUAL_OVERRIDE) {
                 Timber.d("Manual override expired, returning to auto control")
                 _state.value = EngineState.AUTO_CONTROL
-                applyTimeBasedMode()
+                applyAutoMode()
             }
         }
     }
 
     fun destroy() {
         zoneCheckJob?.cancel()
+        sensorObserveJob?.cancel()
         manualOverrideJob?.cancel()
+        ambientLightSensor?.stop()
         scope.cancel()
     }
 }

@@ -10,6 +10,7 @@ import io.hammerhead.karooext.models.SavedDevices
 import io.github.derstrassi.karoofirefly.karoo.KarooLightControl
 import io.github.derstrassi.karoofirefly.data.PreferencesRepository
 import io.github.derstrassi.karoofirefly.datatypes.LightStatusDataType
+import io.github.derstrassi.karoofirefly.engine.AmbientLightSensor
 import io.github.derstrassi.karoofirefly.engine.LightControlEngine
 import io.github.derstrassi.karoofirefly.engine.TimeBasedController
 import kotlinx.coroutines.CoroutineScope
@@ -39,6 +40,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
     internal lateinit var karooSystem: KarooSystemService
     internal lateinit var lightControl: KarooLightControl
     internal lateinit var timeController: TimeBasedController
+    internal lateinit var ambientLightSensor: AmbientLightSensor
     internal lateinit var engine: LightControlEngine
     internal lateinit var repository: PreferencesRepository
 
@@ -60,7 +62,8 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         repository = PreferencesRepository(applicationContext)
         lightControl = KarooLightControl(applicationContext)
         timeController = TimeBasedController()
-        engine = LightControlEngine(timeController)
+        ambientLightSensor = AmbientLightSensor(applicationContext)
+        engine = LightControlEngine(timeController, ambientLightSensor)
 
         // Wire engine mode changes to Karoo's SensorService
         engine.onSetModes = { frontMode, rearMode ->
@@ -108,6 +111,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
             engine.settings = settings
             timeController.dawnOffsetMinutes = settings.dawnOffsetMinutes
             timeController.duskOffsetMinutes = settings.duskOffsetMinutes
+            engine.updateAmbientSensor()
         }
     }
 

@@ -16,9 +16,12 @@ Controls ANT+ bike lights paired through Karoo's native sensor settings. Unlike 
 
 **What works:**
 - Automatic light mode switching based on time of day (sunrise/sunset calculation)
+- Ambient light sensor based mode switching (Karoo 3's built-in lux sensor)
+- Combined mode: time-based baseline with ambient sensor override (e.g. tunnels)
 - Auto on with ride start, auto off with ride stop
 - Configurable light profiles per time zone (day / dusk / night)
 - Configurable dawn/dusk time offsets
+- Configurable lux thresholds for ambient light zones (dark / dim / bright) with live lux readout
 - Uses Karoo-paired lights — no separate pairing needed
 - BonusActions mappable to AXS shift buttons or Karoo hardware buttons:
   - **Toggle Lights** — turns all lights on/off
@@ -27,7 +30,6 @@ Controls ANT+ bike lights paired through Karoo's native sensor settings. Unlike 
 **Planned / Not yet implemented:**
 - Graphical data field showing light status on the ride screen
 - Support for separate front and rear light profiles (currently sends same mode to all lights)
-- Ambient light sensor based mode switching
 - Surface type / road / off-road / GPS based mode switching
 
 ## How It Works
@@ -41,7 +43,7 @@ The extension communicates with Karoo's SensorService via its internal AIDL inte
 ### Layers
 
 1. **Karoo Integration** (`karoo/`) — SensorService AIDL binding, light mode commands
-2. **Engine** (`engine/`) — State machine, sunrise/sunset calculation
+2. **Engine** (`engine/`) — State machine, sunrise/sunset calculation, ambient light sensor
 3. **Data** (`data/`) — DataStore settings, light profiles
 4. **Extension** (`KarooLightControllerExtension.kt`) — KarooExtension service, entry point
 5. **DataTypes** (`datatypes/`) — Graphical data field for ride screen
@@ -50,7 +52,10 @@ The extension communicates with Karoo's SensorService via its internal AIDL inte
 ### State Machine (priority high to low)
 
 1. **Manual Override** — BonusAction pressed, holds for 60s
-2. **Time-based Mode** — DayTimeZone determines profile
+2. **Auto Mode** — Zone determined by configured control mode:
+   - *Time-based:* sunrise/sunset calculation
+   - *Ambient Light:* lux sensor with smoothing (10s moving average) and hysteresis (10s dwell time)
+   - *Combined:* time-based baseline, sensor can darken but not brighten (e.g. tunnel → NIGHT, but headlights at night stay NIGHT)
 3. **Ride State** — Lights off when ride ends
 
 ## Development Setup
