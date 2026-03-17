@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="app/src/main/res/drawable/ic_firefly.svg" width="96" height="96" alt="KarooFireFly icon">
+  <img src="docs/ic_firefly.svg" width="96" height="96" alt="KarooFireFly icon">
 </p>
 
 # KarooFireFly
@@ -21,8 +21,8 @@ Controls ANT+ bike lights paired through Karoo's native sensor settings. Unlike 
 - Configurable dawn/dusk time offsets
 - Uses Karoo-paired lights — no separate pairing needed
 - BonusActions mappable to AXS shift buttons or Karoo hardware buttons:
-  - ⏻ **Toggle Lights** — turns all lights on/off
-  - 🔄 **Cycle Mode** — cycles through modes (Off → High → Medium → Low → Slow Flash → Fast Flash → ...)
+  - **Toggle Lights** — turns all lights on/off
+  - **Cycle Mode** — cycles through modes (Off → High → Medium → Low → Slow Flash → Fast Flash → ...)
 
 **Planned / Not yet implemented:**
 - Graphical data field showing light status on the ride screen

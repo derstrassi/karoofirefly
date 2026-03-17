@@ -13,9 +13,11 @@
 
     <BonusAction
         actionId="toggle-lights"
-        displayName="@string/toggle_lights" />
+        displayName="@string/toggle_lights"
+        icon="@drawable/ic_power" />
 
     <BonusAction
         actionId="cycle-mode"
-        displayName="@string/cycle_mode" />
+        displayName="@string/cycle_mode"
+        icon="@drawable/ic_cycle" />
 </ExtensionInfo>
