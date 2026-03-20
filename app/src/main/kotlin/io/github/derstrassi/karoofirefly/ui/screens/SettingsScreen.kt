@@ -127,7 +127,7 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.primary,
             )
             Text(
-                "Sensor updates on light change or movement",
+                "Sensor updates on movement only!",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -233,7 +233,7 @@ fun SettingsScreen(
                     value = selectedMode.displayName,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Light Mode") },
+                    label = { Text("Test Light Mode") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = debugModeExpanded) },
                     modifier = Modifier
                         .menuAnchor(MenuAnchorType.PrimaryNotEditable)
