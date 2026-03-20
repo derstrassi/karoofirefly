@@ -92,11 +92,12 @@ class LightControlEngine(
 
     fun onToggleLights() {
         _state.value = EngineState.MANUAL_OVERRIDE
-        overrideZone = determineCurrentZone()
+        val zone = determineCurrentZone()
+        overrideZone = zone
         if (_currentFrontMode.value != LightMode.OFF || _currentRearMode.value != LightMode.OFF) {
             setModes(LightMode.OFF, LightMode.OFF)
         } else {
-            val (front, rear) = getModesForZone(overrideZone!!, settings.profile)
+            val (front, rear) = getModesForZone(zone, settings.profile)
             setModes(
                 LightMode.fromModeNumber(front) ?: LightMode.OFF,
                 LightMode.fromModeNumber(rear) ?: LightMode.OFF,
