@@ -160,8 +160,8 @@ fun SettingsScreen(
                 Slider(
                     value = dawnOffset,
                     onValueChange = { dawnOffset = it },
-                    valueRange = 0f..60f,
-                    steps = 11,
+                    valueRange = -120f..120f,
+                    steps = 23,
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -170,8 +170,8 @@ fun SettingsScreen(
                 Slider(
                     value = duskOffset,
                     onValueChange = { duskOffset = it },
-                    valueRange = 0f..60f,
-                    steps = 11,
+                    valueRange = -120f..120f,
+                    steps = 23,
                 )
             }
 
