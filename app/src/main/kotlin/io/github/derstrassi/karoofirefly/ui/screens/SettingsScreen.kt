@@ -44,6 +44,7 @@ import io.github.derstrassi.karoofirefly.data.LightControllerSettings
 fun SettingsScreen(
     settings: LightControllerSettings,
     currentLux: Float = 0f,
+    currentLightMode: LightMode = LightMode.OFF,
     onSave: (LightControllerSettings) -> Unit,
     onNavigateToProfiles: () -> Unit,
     onDebugToggle: (Boolean) -> Unit = {},
@@ -224,16 +225,15 @@ fun SettingsScreen(
         if (debugEnabled) {
             Spacer(modifier = Modifier.height(8.dp))
             var debugModeExpanded by remember { mutableStateOf(false) }
-            var selectedMode by remember { mutableStateOf(LightMode.OFF) }
             ExposedDropdownMenuBox(
                 expanded = debugModeExpanded,
                 onExpandedChange = { debugModeExpanded = it },
             ) {
                 TextField(
-                    value = selectedMode.displayName,
+                    value = currentLightMode.displayName,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Test Light Mode") },
+                    label = { Text("Light Mode") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = debugModeExpanded) },
                     modifier = Modifier
                         .menuAnchor(MenuAnchorType.PrimaryNotEditable)
@@ -247,7 +247,6 @@ fun SettingsScreen(
                         DropdownMenuItem(
                             text = { Text(mode.displayName) },
                             onClick = {
-                                selectedMode = mode
                                 debugModeExpanded = false
                                 onSetMode(mode)
                             },

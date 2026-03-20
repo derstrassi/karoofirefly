@@ -9,9 +9,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
+import io.github.derstrassi.karoofirefly.ant.LightMode
 import io.github.derstrassi.karoofirefly.data.LightControllerSettings
 import io.github.derstrassi.karoofirefly.data.PreferencesRepository
 import io.github.derstrassi.karoofirefly.engine.AmbientLightSensor
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import io.github.derstrassi.karoofirefly.ui.screens.LightProfileScreen
 import io.github.derstrassi.karoofirefly.ui.screens.SettingsScreen
 import io.github.derstrassi.karoofirefly.ui.theme.AppTheme
@@ -40,17 +45,33 @@ class MainActivity : ComponentActivity() {
             luxSensor.start()
         }
 
+        @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+        val frontModeFlow = flow {
+            while (true) {
+                val ext = KarooLightControllerExtension.getInstance()
+                if (ext != null) {
+                    emit(ext)
+                    return@flow
+                }
+                delay(500)
+            }
+        }.flatMapLatest { ext ->
+            ext.engine.currentFrontMode
+        }
+
         setContent {
             AppTheme {
                 val settings by repository.settingsFlow.collectAsState(initial = LightControllerSettings())
                 var currentScreen by remember { mutableStateOf(Screen.SETTINGS) }
 
                 val luxValue by luxSensor.currentLux.collectAsState()
+                val frontMode by frontModeFlow.collectAsState(initial = LightMode.OFF)
 
                 when (currentScreen) {
                     Screen.SETTINGS -> SettingsScreen(
                         settings = settings,
                         currentLux = luxValue,
+                        currentLightMode = frontMode,
                         onSave = { newSettings ->
                             lifecycleScope.launch {
                                 repository.updateSettings(newSettings)
