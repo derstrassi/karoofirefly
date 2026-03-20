@@ -21,8 +21,8 @@ import timber.log.Timber
  * Central state machine for light control.
  *
  * Priority (high → low):
- * 1. Manual Override — user pressed BonusAction → holds for MANUAL_OVERRIDE_DURATION_MS
- * 2. Time-based Mode — DayTimeZone determines baseline profile
+ * 1. Manual Override — user pressed BonusAction → holds until zone change or ride state change
+ * 2. Auto Mode — DayTimeZone determines baseline profile
  * 3. Ride State — lights off when ride ends
  */
 class LightControlEngine(
@@ -30,7 +30,6 @@ class LightControlEngine(
     private val ambientLightSensor: AmbientLightSensor? = null,
 ) {
     companion object {
-        const val MANUAL_OVERRIDE_DURATION_MS = 60_000L
         const val ZONE_CHECK_INTERVAL_MS = 30_000L
     }
 
@@ -47,7 +46,9 @@ class LightControlEngine(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var zoneCheckJob: Job? = null
     private var sensorObserveJob: Job? = null
-    private var manualOverrideJob: Job? = null
+
+    /** The zone at the time the manual override started — override clears on zone change. */
+    private var overrideZone: DayTimeZone? = null
 
     private val _state = MutableStateFlow(EngineState.IDLE)
     val state: StateFlow<EngineState> = _state
@@ -75,13 +76,14 @@ class LightControlEngine(
 
     fun onRidePause() {
         Timber.d("LightControlEngine: ride paused")
+        overrideZone = null
         _state.value = EngineState.PAUSED
     }
 
     fun onRideStop() {
         Timber.d("LightControlEngine: ride stopped")
         stopZoneChecking()
-        manualOverrideJob?.cancel()
+        overrideZone = null
         _state.value = EngineState.IDLE
         if (settings.autoOffWithRide) {
             setModes(LightMode.OFF, LightMode.OFF)
@@ -90,36 +92,41 @@ class LightControlEngine(
 
     fun onToggleLights() {
         _state.value = EngineState.MANUAL_OVERRIDE
+        overrideZone = determineCurrentZone()
         if (_currentFrontMode.value != LightMode.OFF || _currentRearMode.value != LightMode.OFF) {
             setModes(LightMode.OFF, LightMode.OFF)
         } else {
-            val zone = determineCurrentZone()
-            val (front, rear) = getModesForZone(zone, settings.profile)
+            val (front, rear) = getModesForZone(overrideZone!!, settings.profile)
             setModes(
                 LightMode.fromModeNumber(front) ?: LightMode.OFF,
                 LightMode.fromModeNumber(rear) ?: LightMode.OFF,
             )
         }
-        if (settings.controlMode != LightControlMode.MANUAL_ONLY) {
-            startManualOverrideTimer()
-        }
     }
 
     fun onCycleMode() {
         _state.value = EngineState.MANUAL_OVERRIDE
+        overrideZone = determineCurrentZone()
         val modes = LightMode.CYCLING_MODES
         val idx = modes.indexOf(_currentFrontMode.value)
         val nextMode = modes[(idx + 1) % modes.size]
         setModes(nextMode, nextMode)
-        if (settings.controlMode != LightControlMode.MANUAL_ONLY) {
-            startManualOverrideTimer()
-        }
     }
 
     private fun applyAutoMode() {
-        if (_state.value == EngineState.MANUAL_OVERRIDE) return
-
         val zone = determineCurrentZone()
+
+        // During manual override, only clear it when the zone changes
+        if (_state.value == EngineState.MANUAL_OVERRIDE) {
+            if (zone != overrideZone) {
+                Timber.d("Zone changed during override ($overrideZone → $zone), resuming auto control")
+                overrideZone = null
+                _state.value = EngineState.AUTO_CONTROL
+            } else {
+                return
+            }
+        }
+
         val previousZone = _currentZone.value
         if (zone == previousZone && _currentFrontMode.value != LightMode.OFF) return
 
@@ -182,7 +189,7 @@ class LightControlEngine(
         if (sensorObserveJob != null) return
         sensorObserveJob = scope.launch {
             ambientLightSensor?.currentLightZone?.collectLatest {
-                if (_state.value == EngineState.AUTO_CONTROL) {
+                if (_state.value == EngineState.AUTO_CONTROL || _state.value == EngineState.MANUAL_OVERRIDE) {
                     applyAutoMode()
                 }
             }
@@ -236,7 +243,7 @@ class LightControlEngine(
         zoneCheckJob = scope.launch {
             while (true) {
                 delay(ZONE_CHECK_INTERVAL_MS)
-                if (_state.value == EngineState.AUTO_CONTROL) {
+                if (_state.value == EngineState.AUTO_CONTROL || _state.value == EngineState.MANUAL_OVERRIDE) {
                     applyAutoMode()
                 }
             }
@@ -248,22 +255,9 @@ class LightControlEngine(
         zoneCheckJob = null
     }
 
-    private fun startManualOverrideTimer() {
-        manualOverrideJob?.cancel()
-        manualOverrideJob = scope.launch {
-            delay(MANUAL_OVERRIDE_DURATION_MS)
-            if (_state.value == EngineState.MANUAL_OVERRIDE) {
-                Timber.d("Manual override expired, returning to auto control")
-                _state.value = EngineState.AUTO_CONTROL
-                applyAutoMode()
-            }
-        }
-    }
-
     fun destroy() {
         zoneCheckJob?.cancel()
         sensorObserveJob?.cancel()
-        manualOverrideJob?.cancel()
         ambientLightSensor?.stop()
         scope.cancel()
     }
