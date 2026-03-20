@@ -84,6 +84,8 @@ class KarooLightControl(private val context: Context) {
             )
             @Suppress("UNCHECKED_CAST")
             val enumClass = cls as Class<out Enum<*>>
+            val enumConstants = enumClass.enumConstants
+            Timber.i("$TAG: Karoo LightMode enum values (${enumConstants?.size}): ${enumConstants?.joinToString { it.name }}")
             lightModeParcelableCreator = { modeName ->
                 java.lang.Enum.valueOf(enumClass, modeName) as Parcelable
             }

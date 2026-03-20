@@ -64,6 +64,9 @@ class MainActivity : ComponentActivity() {
                         onDebugToggle = { enabled ->
                             KarooLightControllerExtension.getInstance()?.engine?.setDebugMode(enabled)
                         },
+                        onSetMode = { mode ->
+                            KarooLightControllerExtension.getInstance()?.engine?.setDebugLightMode(mode)
+                        },
                     )
                     Screen.PROFILES -> LightProfileScreen(
                         profile = settings.profile,

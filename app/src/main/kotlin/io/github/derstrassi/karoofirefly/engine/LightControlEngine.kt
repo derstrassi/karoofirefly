@@ -65,6 +65,7 @@ class LightControlEngine(
 
     fun onRideStart() {
         Timber.d("LightControlEngine: ride started")
+        if (settings.controlMode == LightControlMode.MANUAL_ONLY) return
         if (settings.autoOnWithRide) {
             _state.value = EngineState.AUTO_CONTROL
             applyAutoMode()
@@ -99,7 +100,9 @@ class LightControlEngine(
                 LightMode.fromModeNumber(rear) ?: LightMode.OFF,
             )
         }
-        startManualOverrideTimer()
+        if (settings.controlMode != LightControlMode.MANUAL_ONLY) {
+            startManualOverrideTimer()
+        }
     }
 
     fun onCycleMode() {
@@ -108,7 +111,9 @@ class LightControlEngine(
         val idx = modes.indexOf(_currentFrontMode.value)
         val nextMode = modes[(idx + 1) % modes.size]
         setModes(nextMode, nextMode)
-        startManualOverrideTimer()
+        if (settings.controlMode != LightControlMode.MANUAL_ONLY) {
+            startManualOverrideTimer()
+        }
     }
 
     private fun applyAutoMode() {
@@ -126,7 +131,7 @@ class LightControlEngine(
         setModes(front, rear)
 
         if (zone != previousZone) {
-            Timber.d("Zone: $previousZone → $zone (front=${front.karooModeName}, rear=${rear.karooModeName})")
+            Timber.d("Zone: $previousZone → $zone (front=${front.karooName}, rear=${rear.karooName})")
         }
     }
 
@@ -140,6 +145,7 @@ class LightControlEngine(
      */
     private fun determineCurrentZone(): DayTimeZone {
         return when (settings.controlMode) {
+            LightControlMode.MANUAL_ONLY -> DayTimeZone.DAY
             LightControlMode.TIME_BASED -> timeController.getCurrentZone()
             LightControlMode.AMBIENT_LIGHT -> {
                 ambientLightSensor?.currentLightZone?.value ?: timeController.getCurrentZone()
@@ -160,7 +166,7 @@ class LightControlEngine(
      */
     fun updateAmbientSensor() {
         ambientLightSensor?.let {
-            if (settings.controlMode != LightControlMode.TIME_BASED) {
+            if (settings.controlMode == LightControlMode.AMBIENT_LIGHT || settings.controlMode == LightControlMode.COMBINED) {
                 it.darkThreshold = settings.ambientDarkThreshold
                 it.dimThreshold = settings.ambientDimThreshold
                 it.start()
@@ -206,10 +212,15 @@ class LightControlEngine(
         }
     }
 
+    fun setDebugLightMode(mode: LightMode) {
+        Timber.d("LightControlEngine: debug set mode ${mode.displayName}")
+        setModes(mode, mode)
+    }
+
     private fun setModes(front: LightMode, rear: LightMode) {
         _currentFrontMode.value = front
         _currentRearMode.value = rear
-        onSetModes?.invoke(front.karooModeName, rear.karooModeName)
+        onSetModes?.invoke(front.karooName, rear.karooName)
     }
 
     private fun getModesForZone(zone: DayTimeZone, profile: LightProfile): Pair<Int, Int> {

@@ -10,7 +10,7 @@ import kotlinx.serialization.Serializable
 data class LightProfile(
     val dayModeFront: Int = LightMode.SLOW_FLASH.modeNumber,
     val dayModeRear: Int = LightMode.SLOW_FLASH.modeNumber,
-    val duskModeFront: Int = LightMode.STEADY_MEDIUM.modeNumber,
+    val duskModeFront: Int = LightMode.STEADY_LOW.modeNumber,
     val duskModeRear: Int = LightMode.STEADY_HIGH.modeNumber,
     val nightModeFront: Int = LightMode.STEADY_HIGH.modeNumber,
     val nightModeRear: Int = LightMode.STEADY_HIGH.modeNumber,
@@ -23,6 +23,7 @@ enum class DayTimeZone {
 }
 
 enum class LightControlMode {
+    MANUAL_ONLY,
     TIME_BASED,
     AMBIENT_LIGHT,
     COMBINED,
@@ -33,6 +34,7 @@ enum class LightControlMode {
  */
 @Serializable
 data class LightControllerSettings(
+    val profileVersion: Int = 1,
     val dawnOffsetMinutes: Int = 30,
     val duskOffsetMinutes: Int = 30,
     val autoOnWithRide: Boolean = true,

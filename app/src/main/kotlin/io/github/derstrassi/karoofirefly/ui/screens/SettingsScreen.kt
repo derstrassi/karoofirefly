@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import io.github.derstrassi.karoofirefly.ant.LightMode
 import io.github.derstrassi.karoofirefly.data.LightControlMode
 import io.github.derstrassi.karoofirefly.data.LightControllerSettings
 
@@ -42,6 +43,7 @@ fun SettingsScreen(
     onSave: (LightControllerSettings) -> Unit,
     onNavigateToProfiles: () -> Unit,
     onDebugToggle: (Boolean) -> Unit = {},
+    onSetMode: (LightMode) -> Unit = {},
 ) {
     var dawnOffset by remember(settings) { mutableFloatStateOf(settings.dawnOffsetMinutes.toFloat()) }
     var duskOffset by remember(settings) { mutableFloatStateOf(settings.duskOffsetMinutes.toFloat()) }
@@ -61,56 +63,12 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Dawn offset
-        Text("Dawn Offset: ${dawnOffset.toInt()} min")
-        Slider(
-            value = dawnOffset,
-            onValueChange = { dawnOffset = it },
-            valueRange = 0f..60f,
-            steps = 11,
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Dusk offset
-        Text("Dusk Offset: ${duskOffset.toInt()} min")
-        Slider(
-            value = duskOffset,
-            onValueChange = { duskOffset = it },
-            valueRange = 0f..60f,
-            steps = 11,
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Auto on/off toggles
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Auto-on with ride")
-            Switch(checked = autoOn, onCheckedChange = { autoOn = it })
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Auto-off with ride")
-            Switch(checked = autoOff, onCheckedChange = { autoOff = it })
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
         // Light Control Mode dropdown
         Text("Light Control Mode", style = MaterialTheme.typography.titleSmall)
         Spacer(modifier = Modifier.height(4.dp))
 
         val modeLabels = mapOf(
+            LightControlMode.MANUAL_ONLY to "Off (BonusButton only)",
             LightControlMode.TIME_BASED to "Time-based (sunrise/sunset)",
             LightControlMode.AMBIENT_LIGHT to "Ambient Light Sensor",
             LightControlMode.COMBINED to "Combined (time + sensor)",
@@ -145,8 +103,8 @@ fun SettingsScreen(
             }
         }
 
-        // Ambient light threshold sliders (visible when not TIME_BASED)
-        if (controlMode != LightControlMode.TIME_BASED) {
+        // Ambient light threshold sliders (visible for sensor modes)
+        if (controlMode == LightControlMode.AMBIENT_LIGHT || controlMode == LightControlMode.COMBINED) {
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 "Current: %.1f Lux".format(currentLux),
@@ -178,6 +136,54 @@ fun SettingsScreen(
             )
         }
 
+        if (controlMode != LightControlMode.MANUAL_ONLY) {
+            // Dawn/Dusk offsets (only for time-based modes)
+            if (controlMode == LightControlMode.TIME_BASED || controlMode == LightControlMode.COMBINED) {
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text("Dawn Offset: ${dawnOffset.toInt()} min")
+                Slider(
+                    value = dawnOffset,
+                    onValueChange = { dawnOffset = it },
+                    valueRange = 0f..60f,
+                    steps = 11,
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text("Dusk Offset: ${duskOffset.toInt()} min")
+                Slider(
+                    value = duskOffset,
+                    onValueChange = { duskOffset = it },
+                    valueRange = 0f..60f,
+                    steps = 11,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Auto on/off toggles
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Auto-on with ride")
+                Switch(checked = autoOn, onCheckedChange = { autoOn = it })
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Auto-off with ride")
+                Switch(checked = autoOff, onCheckedChange = { autoOff = it })
+            }
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // Debug mode toggle
@@ -198,6 +204,42 @@ fun SettingsScreen(
                     onDebugToggle(it)
                 },
             )
+        }
+
+        if (debugEnabled) {
+            Spacer(modifier = Modifier.height(8.dp))
+            var debugModeExpanded by remember { mutableStateOf(false) }
+            var selectedMode by remember { mutableStateOf(LightMode.OFF) }
+            ExposedDropdownMenuBox(
+                expanded = debugModeExpanded,
+                onExpandedChange = { debugModeExpanded = it },
+            ) {
+                TextField(
+                    value = selectedMode.displayName,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Light Mode") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = debugModeExpanded) },
+                    modifier = Modifier
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                        .fillMaxWidth(),
+                )
+                ExposedDropdownMenu(
+                    expanded = debugModeExpanded,
+                    onDismissRequest = { debugModeExpanded = false },
+                ) {
+                    LightMode.entries.forEach { mode ->
+                        DropdownMenuItem(
+                            text = { Text(mode.displayName) },
+                            onClick = {
+                                selectedMode = mode
+                                debugModeExpanded = false
+                                onSetMode(mode)
+                            },
+                        )
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
