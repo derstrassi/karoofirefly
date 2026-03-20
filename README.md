@@ -30,7 +30,6 @@ Controls ANT+ bike lights paired through Karoo's native sensor settings. Unlike 
 
 **Planned / Not yet implemented:**
 - Graphical data field showing light status on the ride screen
-- Support for separate front and rear light profiles (currently sends same mode to all lights)
 
 ## How It Works
 
