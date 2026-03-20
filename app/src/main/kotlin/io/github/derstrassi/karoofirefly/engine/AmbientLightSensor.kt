@@ -40,18 +40,24 @@ class AmbientLightSensor(context: Context) : SensorEventListener {
 
     val isAvailable: Boolean get() = lightSensor != null
 
+    private var running = false
+
     fun start() {
+        if (running) return
         if (lightSensor == null) {
             Timber.w("AmbientLightSensor: No light sensor available on this device")
             return
         }
         sensorManager.registerListener(this, lightSensor, SensorManager.SENSOR_DELAY_NORMAL)
+        running = true
         Timber.d("AmbientLightSensor: started")
     }
 
     fun stop() {
+        if (!running) return
         sensorManager.unregisterListener(this)
         luxBuffer.clear()
+        running = false
         Timber.d("AmbientLightSensor: stopped")
     }
 

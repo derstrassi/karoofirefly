@@ -16,7 +16,6 @@ import io.github.derstrassi.karoofirefly.engine.AmbientLightSensor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
 import io.github.derstrassi.karoofirefly.ui.screens.LightProfileScreen
 import io.github.derstrassi.karoofirefly.ui.screens.SettingsScreen
 import io.github.derstrassi.karoofirefly.ui.theme.AppTheme
@@ -34,29 +33,36 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         repository = PreferencesRepository(applicationContext)
-        val extSensor = KarooLightControllerExtension.getInstance()?.ambientLightSensor
-        if (extSensor != null) {
-            luxSensor = extSensor
+        val ext = KarooLightControllerExtension.getInstance()
+        if (ext != null) {
+            luxSensor = ext.ambientLightSensor
         } else {
             luxSensor = AmbientLightSensor(applicationContext)
             ownsLuxSensor = true
-        }
-        if (ownsLuxSensor) {
             luxSensor.start()
         }
 
+        // Wait for extension to become available
         @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-        val frontModeFlow = flow {
+        val extensionFlow = flow {
             while (true) {
-                val ext = KarooLightControllerExtension.getInstance()
-                if (ext != null) {
-                    emit(ext)
+                val instance = KarooLightControllerExtension.getInstance()
+                if (instance != null) {
+                    emit(instance)
                     return@flow
                 }
                 delay(500)
             }
-        }.flatMapLatest { ext ->
-            ext.engine.currentFrontMode
+        }
+
+        val frontModeFlow = extensionFlow.flatMapLatest { it.engine.currentFrontMode }
+        val luxFlow = extensionFlow.flatMapLatest {
+            // Stop own sensor once extension is available
+            if (ownsLuxSensor) {
+                luxSensor.stop()
+                ownsLuxSensor = false
+            }
+            it.ambientLightSensor.currentLux
         }
 
         setContent {
@@ -64,7 +70,7 @@ class MainActivity : ComponentActivity() {
                 val settings by repository.settingsFlow.collectAsState(initial = LightControllerSettings())
                 var currentScreen by remember { mutableStateOf(Screen.SETTINGS) }
 
-                val luxValue by luxSensor.currentLux.collectAsState()
+                val luxValue by luxFlow.collectAsState(initial = luxSensor.currentLux.value)
                 val frontMode by frontModeFlow.collectAsState(initial = LightMode.OFF)
 
                 when (currentScreen) {
