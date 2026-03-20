@@ -15,28 +15,62 @@ ANT+ Smart Bike Light Controller extension for Hammerhead Karoo 3.
 Controls ANT+ bike lights paired through Karoo's native sensor settings. Unlike Karoo's built-in light support which only toggles on/off at ride start/stop, KarooFireFly sets specific light modes based on time of day.
 
 **What works:**
+- 4 light control modes: Manual only, Time-based, Ambient Light Sensor, Combined
 - Automatic light mode switching based on time of day (sunrise/sunset calculation)
 - Ambient light sensor based mode switching (Karoo 3's built-in lux sensor)
 - Combined mode: time-based baseline with ambient sensor override (e.g. tunnels)
 - Auto on with ride start, auto off with ride stop
 - Configurable light profiles per time zone (day / dusk / night)
 - Configurable dawn/dusk time offsets
-- Configurable lux thresholds for ambient light zones (dark / dim / bright) with live lux readout
+- Configurable lux thresholds for ambient light zones with live lux readout
 - Uses Karoo-paired lights — no separate pairing needed
 - BonusActions mappable to AXS shift buttons or Karoo hardware buttons:
   - **Toggle Lights** — turns all lights on/off
-  - **Cycle Mode** — cycles through modes (Off → High → Medium → Low → Slow Flash → Fast Flash → ...)
+  - **Cycle Mode** — cycles through modes (Off → Steady High → Steady Low → Slow Flash → Fast Flash)
 
 **Planned / Not yet implemented:**
 - Graphical data field showing light status on the ride screen
 - Support for separate front and rear light profiles (currently sends same mode to all lights)
-- Surface type / road / off-road / GPS based mode switching
 
 ## How It Works
 
 Pair your ANT+ lights through **Karoo's native sensor settings** (Settings > Sensors). When a ride starts, KarooFireFly automatically discovers the paired lights and controls their mode through Karoo's internal SensorService. No pairing UI in the extension — just configure your light profiles and time offsets.
 
 The extension communicates with Karoo's SensorService via its internal AIDL interface to send light mode commands. This means the extension works with whatever lights Karoo has already paired and connected — no need for separate ANT+ channel management.
+
+## Settings
+
+### Light Control Mode
+
+Choose how lights are controlled:
+
+| Mode | Description |
+|------|-------------|
+| **Off (BonusButton only)** | No automatic control — lights only respond to BonusButton presses |
+| **Time-based** | Automatic mode switching based on sunrise/sunset |
+| **Ambient Light Sensor** | Automatic mode switching based on Karoo's lux sensor |
+| **Combined** | Time-based baseline, sensor can darken but not brighten (e.g. tunnels) |
+
+<p align="center">
+  <img src="docs/settings_manual.png" width="240" alt="Manual mode">
+  <img src="docs/settings_timebased.png" width="240" alt="Time-based mode">
+</p>
+<p align="center">
+  <img src="docs/settings_ambient.png" width="240" alt="Ambient light mode">
+  <img src="docs/settings_combined.png" width="240" alt="Combined mode">
+</p>
+
+### Light Profiles
+
+Configure which light mode to use for each time zone (Day, Dusk/Dawn, Night) with separate front and rear settings.
+
+<p align="center">
+  <img src="docs/settings_profiles.png" width="240" alt="Light profiles">
+</p>
+
+### Manual Override
+
+When using an auto mode (Time-based, Ambient, Combined), BonusButton presses temporarily override the automatic control. The override clears automatically when the light zone changes (e.g. sunset transition or exiting a tunnel) or when the ride state changes (pause/stop).
 
 ## Architecture
 
@@ -51,7 +85,7 @@ The extension communicates with Karoo's SensorService via its internal AIDL inte
 
 ### State Machine (priority high to low)
 
-1. **Manual Override** — BonusAction pressed, holds for 60s
+1. **Manual Override** — BonusAction pressed, holds until zone change or ride state change
 2. **Auto Mode** — Zone determined by configured control mode:
    - *Time-based:* sunrise/sunset calculation
    - *Ambient Light:* lux sensor with smoothing (10s moving average) and hysteresis (10s dwell time)
