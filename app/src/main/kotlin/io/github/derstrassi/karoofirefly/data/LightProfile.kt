@@ -34,8 +34,8 @@ enum class LightControlMode {
  */
 @Serializable
 data class LightControllerSettings(
-    val dawnOffsetMinutes: Int = 30,
-    val duskOffsetMinutes: Int = 30,
+    val dawnOffsetMinutes: Int = 0,
+    val duskOffsetMinutes: Int = 0,
     val autoOnWithRide: Boolean = true,
     val autoOffWithRide: Boolean = true,
     val profile: LightProfile = LightProfile(),
