@@ -39,7 +39,7 @@ data class LightControllerSettings(
     val autoOnWithRide: Boolean = true,
     val autoOffWithRide: Boolean = true,
     val profile: LightProfile = LightProfile(),
-    val lightControlMode: String = "TIME_BASED",
+    val lightControlMode: String = "MANUAL_ONLY",
     val ambientDarkThreshold: Int = 50,
     val ambientDimThreshold: Int = 200,
 ) {
