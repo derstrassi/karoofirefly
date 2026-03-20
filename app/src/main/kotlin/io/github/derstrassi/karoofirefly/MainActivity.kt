@@ -36,7 +36,9 @@ class MainActivity : ComponentActivity() {
             luxSensor = AmbientLightSensor(applicationContext)
             ownsLuxSensor = true
         }
-        luxSensor.start()
+        if (ownsLuxSensor) {
+            luxSensor.start()
+        }
 
         setContent {
             AppTheme {

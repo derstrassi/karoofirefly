@@ -19,8 +19,8 @@ import timber.log.Timber
 class AmbientLightSensor(context: Context) : SensorEventListener {
 
     companion object {
-        private const val SMOOTHING_WINDOW_SIZE = 10 // ~5s at ~2Hz sensor rate
-        private const val MIN_DWELL_TIME_MS = 5_000L // minimum time before zone can change
+        private const val SMOOTHING_WINDOW_SIZE = 10 // ~2s at ~5Hz sensor rate
+        private const val MIN_DWELL_TIME_MS = 10_000L // minimum time before zone can change
     }
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -45,7 +45,7 @@ class AmbientLightSensor(context: Context) : SensorEventListener {
             Timber.w("AmbientLightSensor: No light sensor available on this device")
             return
         }
-        sensorManager.registerListener(this, lightSensor, SensorManager.SENSOR_DELAY_UI)
+        sensorManager.registerListener(this, lightSensor, SensorManager.SENSOR_DELAY_NORMAL)
         Timber.d("AmbientLightSensor: started")
     }
 

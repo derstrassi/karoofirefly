@@ -15,8 +15,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 class LightStatusDataType(
@@ -33,18 +33,22 @@ class LightStatusDataType(
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
         scope.launch {
-            while (isActive) {
-                val values = mutableMapOf<String, Double>()
-                values[FIELD_FRONT_MODE] = engine.currentFrontMode.value.modeNumber.toDouble()
-                values[FIELD_REAR_MODE] = engine.currentRearMode.value.modeNumber.toDouble()
-                values[FIELD_ZONE] = engine.currentZone.value.ordinal.toDouble()
-
+            combine(
+                engine.currentFrontMode,
+                engine.currentRearMode,
+                engine.currentZone,
+            ) { frontMode, rearMode, zone ->
+                mapOf(
+                    FIELD_FRONT_MODE to frontMode.modeNumber.toDouble(),
+                    FIELD_REAR_MODE to rearMode.modeNumber.toDouble(),
+                    FIELD_ZONE to zone.ordinal.toDouble(),
+                )
+            }.distinctUntilChanged().collect { values ->
                 emitter.onNext(
                     StreamState.Streaming(
                         DataPoint(dataTypeId = dataTypeId, values = values),
                     ),
                 )
-                delay(1000)
             }
         }
 
@@ -57,12 +61,14 @@ class LightStatusDataType(
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
         scope.launch {
-            while (isActive) {
+            combine(
+                engine.currentFrontMode,
+                engine.currentRearMode,
+                engine.state,
+            ) { frontMode, rearMode, state ->
+                Triple(frontMode, rearMode, state)
+            }.distinctUntilChanged().collect { (frontMode, rearMode, state) ->
                 val remoteViews = RemoteViews(context.packageName, R.layout.light_status_view)
-
-                val frontMode = engine.currentFrontMode.value
-                val rearMode = engine.currentRearMode.value
-                val state = engine.state.value
 
                 val modeText = when (state) {
                     LightControlEngine.EngineState.IDLE -> "Lights Off"
@@ -73,7 +79,6 @@ class LightStatusDataType(
                 remoteViews.setTextViewText(R.id.light_battery_text, engine.currentZone.value.name)
 
                 emitter.updateView(remoteViews)
-                delay(1000)
             }
         }
 
