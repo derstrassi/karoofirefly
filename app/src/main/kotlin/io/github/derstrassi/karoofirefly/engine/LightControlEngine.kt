@@ -68,7 +68,8 @@ class LightControlEngine(
         Timber.d("LightControlEngine: ride started")
         if (settings.controlMode == LightControlMode.MANUAL_ONLY) return
         if (settings.autoOnWithRide) {
-            _state.value = EngineState.AUTO_CONTROL
+            // Restore override state if resuming from pause
+            _state.value = if (overrideZone != null) EngineState.MANUAL_OVERRIDE else EngineState.AUTO_CONTROL
             applyAutoMode()
             startZoneChecking()
         }
@@ -76,7 +77,6 @@ class LightControlEngine(
 
     fun onRidePause() {
         Timber.d("LightControlEngine: ride paused")
-        overrideZone = null
         _state.value = EngineState.PAUSED
     }
 
