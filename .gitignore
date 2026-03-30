@@ -12,6 +12,5 @@ local.properties
 .DS_Store
 Thumbs.db
 
-# ANT SDK (user must provide)
-app/libs/*.aar
+# ANT SDK JARs
 app/libs/*.jar
