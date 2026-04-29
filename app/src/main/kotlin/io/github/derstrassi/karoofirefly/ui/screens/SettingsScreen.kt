@@ -94,6 +94,11 @@ fun SettingsScreen(
                 modifier = Modifier.size(40.dp),
             )
         }
+        Text(
+            "Automatic ANT+ light control based on time of day and ambient light.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
 
