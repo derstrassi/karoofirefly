@@ -78,6 +78,8 @@ class MainActivity : ComponentActivity() {
                         settings = settings,
                         currentLux = luxValue,
                         currentLightMode = frontMode,
+                        sunriseTime = KarooLightControllerExtension.getInstance()?.timeController?.getSunriseTime(),
+                        sunsetTime = KarooLightControllerExtension.getInstance()?.timeController?.getSunsetTime(),
                         onSave = { newSettings ->
                             lifecycleScope.launch {
                                 repository.updateSettings(newSettings)

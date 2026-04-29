@@ -38,6 +38,7 @@ import io.github.derstrassi.karoofirefly.R
 import io.github.derstrassi.karoofirefly.ant.LightMode
 import io.github.derstrassi.karoofirefly.data.LightControlMode
 import io.github.derstrassi.karoofirefly.data.LightControllerSettings
+import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,6 +46,8 @@ fun SettingsScreen(
     settings: LightControllerSettings,
     currentLux: Float = 0f,
     currentLightMode: LightMode = LightMode.OFF,
+    sunriseTime: Calendar? = null,
+    sunsetTime: Calendar? = null,
     onSave: (LightControllerSettings) -> Unit,
     onNavigateToProfiles: () -> Unit,
     onDebugToggle: (Boolean) -> Unit = {},
@@ -54,7 +57,8 @@ fun SettingsScreen(
     var duskOffset by remember(settings) { mutableFloatStateOf(settings.duskOffsetMinutes.toFloat()) }
     var autoOn by remember(settings) { mutableStateOf(settings.autoOnWithRide) }
     var autoOff by remember(settings) { mutableStateOf(settings.autoOffWithRide) }
-    var controlMode by remember(settings) { mutableStateOf(settings.controlMode) }
+    var useTimeBased by remember(settings) { mutableStateOf(settings.useTimeBased) }
+    var useAmbientLight by remember(settings) { mutableStateOf(settings.useAmbientLight) }
     var darkThreshold by remember(settings) { mutableIntStateOf(settings.ambientDarkThreshold) }
     var dimThreshold by remember(settings) { mutableIntStateOf(settings.ambientDimThreshold) }
 
@@ -79,48 +83,32 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Light Control Mode dropdown
-        Text("Light Control Mode", style = MaterialTheme.typography.titleSmall)
-        Spacer(modifier = Modifier.height(4.dp))
+        // Light Control Mode switches
+        Text("Light Control", style = MaterialTheme.typography.titleSmall)
+        Spacer(modifier = Modifier.height(8.dp))
 
-        val modeLabels = mapOf(
-            LightControlMode.MANUAL_ONLY to "Off (BonusButton only)",
-            LightControlMode.TIME_BASED to "Time-based (sunrise/sunset)",
-            LightControlMode.AMBIENT_LIGHT to "Ambient Light Sensor",
-            LightControlMode.COMBINED to "Combined (time + sensor)",
-        )
-        var modeDropdownExpanded by remember { mutableStateOf(false) }
-        ExposedDropdownMenuBox(
-            expanded = modeDropdownExpanded,
-            onExpandedChange = { modeDropdownExpanded = it },
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextField(
-                value = modeLabels[controlMode] ?: "",
-                onValueChange = {},
-                readOnly = true,
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = modeDropdownExpanded) },
-                modifier = Modifier
-                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                    .fillMaxWidth(),
-            )
-            ExposedDropdownMenu(
-                expanded = modeDropdownExpanded,
-                onDismissRequest = { modeDropdownExpanded = false },
-            ) {
-                LightControlMode.entries.forEach { mode ->
-                    DropdownMenuItem(
-                        text = { Text(modeLabels[mode] ?: mode.name) },
-                        onClick = {
-                            controlMode = mode
-                            modeDropdownExpanded = false
-                        },
-                    )
-                }
-            }
+            Text("Time-based (sunrise/sunset)", modifier = Modifier.weight(1f))
+            Switch(checked = useTimeBased, onCheckedChange = { useTimeBased = it })
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Ambient Light Sensor", modifier = Modifier.weight(1f))
+            Switch(checked = useAmbientLight, onCheckedChange = { useAmbientLight = it })
         }
 
         // Ambient light threshold sliders (visible for sensor modes)
-        if (controlMode == LightControlMode.AMBIENT_LIGHT || controlMode == LightControlMode.COMBINED) {
+        if (useAmbientLight) {
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 "Current: %.1f Lux".format(currentLux),
@@ -152,12 +140,19 @@ fun SettingsScreen(
             )
         }
 
-        if (controlMode != LightControlMode.MANUAL_ONLY) {
-            // Dawn/Dusk offsets (only for time-based modes)
-            if (controlMode == LightControlMode.TIME_BASED || controlMode == LightControlMode.COMBINED) {
+        if (useTimeBased || useAmbientLight) {
+            if (useTimeBased) {
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text("Dawn Offset: ${dawnOffset.toInt()} min")
+                val dawnTimeText = sunriseTime?.let { sr ->
+                    val start = (sr.clone() as Calendar).apply { add(Calendar.MINUTE, -dawnOffset.toInt()) }
+                    val end = (sr.clone() as Calendar).apply { add(Calendar.MINUTE, dawnOffset.toInt()) }
+                    " (%02d:%02d – %02d:%02d)".format(
+                        start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE),
+                        end.get(Calendar.HOUR_OF_DAY), end.get(Calendar.MINUTE),
+                    )
+                } ?: ""
+                Text("Dawn Offset: ${dawnOffset.toInt()} min$dawnTimeText")
                 Slider(
                     value = dawnOffset,
                     onValueChange = { dawnOffset = it },
@@ -167,7 +162,15 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text("Dusk Offset: ${duskOffset.toInt()} min")
+                val duskTimeText = sunsetTime?.let { ss ->
+                    val start = (ss.clone() as Calendar).apply { add(Calendar.MINUTE, -duskOffset.toInt()) }
+                    val end = (ss.clone() as Calendar).apply { add(Calendar.MINUTE, duskOffset.toInt()) }
+                    " (%02d:%02d – %02d:%02d)".format(
+                        start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE),
+                        end.get(Calendar.HOUR_OF_DAY), end.get(Calendar.MINUTE),
+                    )
+                } ?: ""
+                Text("Dusk Offset: ${duskOffset.toInt()} min$duskTimeText")
                 Slider(
                     value = duskOffset,
                     onValueChange = { duskOffset = it },
@@ -184,7 +187,7 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Auto-on with ride")
+                Text("Auto-on with ride", modifier = Modifier.weight(1f))
                 Switch(checked = autoOn, onCheckedChange = { autoOn = it })
             }
 
@@ -195,7 +198,7 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Auto-off with ride")
+                Text("Auto-off with ride", modifier = Modifier.weight(1f))
                 Switch(checked = autoOff, onCheckedChange = { autoOff = it })
             }
         }
@@ -272,7 +275,7 @@ fun SettingsScreen(
                         duskOffsetMinutes = duskOffset.toInt(),
                         autoOnWithRide = autoOn,
                         autoOffWithRide = autoOff,
-                        lightControlMode = controlMode.name,
+                        lightControlMode = LightControlMode.fromFlags(useTimeBased, useAmbientLight).name,
                         ambientDarkThreshold = darkThreshold,
                         ambientDimThreshold = dimThreshold,
                     ),

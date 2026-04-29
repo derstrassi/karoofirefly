@@ -26,7 +26,16 @@ enum class LightControlMode {
     MANUAL_ONLY,
     TIME_BASED,
     AMBIENT_LIGHT,
-    COMBINED,
+    COMBINED;
+
+    companion object {
+        fun fromFlags(timeBased: Boolean, ambientLight: Boolean): LightControlMode = when {
+            timeBased && ambientLight -> COMBINED
+            timeBased -> TIME_BASED
+            ambientLight -> AMBIENT_LIGHT
+            else -> MANUAL_ONLY
+        }
+    }
 }
 
 /**
@@ -49,4 +58,10 @@ data class LightControllerSettings(
         } catch (_: IllegalArgumentException) {
             LightControlMode.TIME_BASED
         }
+
+    val useTimeBased: Boolean
+        get() = controlMode == LightControlMode.TIME_BASED || controlMode == LightControlMode.COMBINED
+
+    val useAmbientLight: Boolean
+        get() = controlMode == LightControlMode.AMBIENT_LIGHT || controlMode == LightControlMode.COMBINED
 }
