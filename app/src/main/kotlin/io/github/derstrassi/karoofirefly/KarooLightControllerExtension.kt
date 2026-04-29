@@ -72,7 +72,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         }
 
         engine.onZoneChange = { oldZone, newZone, reason, frontMode, rearMode ->
-            if (engine.settings.zoneNotificationsEnabled) {
+            if (engine.settings.zoneNotificationsEnabled && engine.state.value != LightControlEngine.EngineState.IDLE) {
                 playNotificationSound()
                 karooSystem.dispatch(
                     InRideAlert(
