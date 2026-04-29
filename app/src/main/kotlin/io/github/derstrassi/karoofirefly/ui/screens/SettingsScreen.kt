@@ -96,6 +96,36 @@ fun SettingsScreen(
             Switch(checked = useTimeBased, onCheckedChange = { useTimeBased = it })
         }
 
+        if (useTimeBased) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            val dawnTimeText = sunriseTime?.let { sr ->
+                val start = (sr.clone() as Calendar).apply { add(Calendar.MINUTE, -dawnOffset.toInt()) }
+                " → from %02d:%02d".format(start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE))
+            } ?: ""
+            Text("Dawn Offset: ${dawnOffset.toInt()} min$dawnTimeText")
+            Slider(
+                value = dawnOffset,
+                onValueChange = { dawnOffset = it },
+                valueRange = -120f..120f,
+                steps = 23,
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            val duskTimeText = sunsetTime?.let { ss ->
+                val start = (ss.clone() as Calendar).apply { add(Calendar.MINUTE, -duskOffset.toInt()) }
+                " → from %02d:%02d".format(start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE))
+            } ?: ""
+            Text("Dusk Offset: ${duskOffset.toInt()} min$duskTimeText")
+            Slider(
+                value = duskOffset,
+                onValueChange = { duskOffset = it },
+                valueRange = -120f..120f,
+                steps = 23,
+            )
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(
@@ -107,7 +137,6 @@ fun SettingsScreen(
             Switch(checked = useAmbientLight, onCheckedChange = { useAmbientLight = it })
         }
 
-        // Ambient light threshold sliders (visible for sensor modes)
         if (useAmbientLight) {
             Spacer(modifier = Modifier.height(16.dp))
             Text(
@@ -141,44 +170,6 @@ fun SettingsScreen(
         }
 
         if (useTimeBased || useAmbientLight) {
-            if (useTimeBased) {
-                Spacer(modifier = Modifier.height(16.dp))
-
-                val dawnTimeText = sunriseTime?.let { sr ->
-                    val start = (sr.clone() as Calendar).apply { add(Calendar.MINUTE, -dawnOffset.toInt()) }
-                    val end = (sr.clone() as Calendar).apply { add(Calendar.MINUTE, dawnOffset.toInt()) }
-                    " (%02d:%02d – %02d:%02d)".format(
-                        start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE),
-                        end.get(Calendar.HOUR_OF_DAY), end.get(Calendar.MINUTE),
-                    )
-                } ?: ""
-                Text("Dawn Offset: ${dawnOffset.toInt()} min$dawnTimeText")
-                Slider(
-                    value = dawnOffset,
-                    onValueChange = { dawnOffset = it },
-                    valueRange = -120f..120f,
-                    steps = 23,
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                val duskTimeText = sunsetTime?.let { ss ->
-                    val start = (ss.clone() as Calendar).apply { add(Calendar.MINUTE, -duskOffset.toInt()) }
-                    val end = (ss.clone() as Calendar).apply { add(Calendar.MINUTE, duskOffset.toInt()) }
-                    " (%02d:%02d – %02d:%02d)".format(
-                        start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE),
-                        end.get(Calendar.HOUR_OF_DAY), end.get(Calendar.MINUTE),
-                    )
-                } ?: ""
-                Text("Dusk Offset: ${duskOffset.toInt()} min$duskTimeText")
-                Slider(
-                    value = duskOffset,
-                    onValueChange = { duskOffset = it },
-                    valueRange = -120f..120f,
-                    steps = 23,
-                )
-            }
-
             Spacer(modifier = Modifier.height(16.dp))
 
             // Auto on/off toggles
