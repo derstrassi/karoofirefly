@@ -1,9 +1,9 @@
 package io.github.derstrassi.karoofirefly
 
-import android.graphics.Color
 import io.hammerhead.karooext.KarooSystemService
 import io.hammerhead.karooext.extension.KarooExtension
 import io.hammerhead.karooext.models.InRideAlert
+import io.hammerhead.karooext.models.PlayBeepPattern
 import io.hammerhead.karooext.models.OnLocationChanged
 import io.hammerhead.karooext.models.RideState
 import io.hammerhead.karooext.models.SavedDevices
@@ -69,6 +69,23 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         engine.onSetModes = { frontMode, rearMode ->
             frontLightId?.let { lightControl.setLightMode(it, frontMode) }
             rearLightId?.let { lightControl.setLightMode(it, rearMode) }
+        }
+
+        engine.onZoneChange = { oldZone, newZone, reason, frontMode, rearMode ->
+            if (engine.settings.zoneNotificationsEnabled) {
+                playNotificationSound()
+                karooSystem.dispatch(
+                    InRideAlert(
+                        id = "zone-change",
+                        icon = R.drawable.ic_firefly,
+                        title = "$oldZone → $newZone ($reason)",
+                        detail = "F: ${frontMode.displayName}\nR: ${rearMode.displayName}",
+                        autoDismissMs = 10000,
+                        backgroundColor = android.R.color.black,
+                        textColor = android.R.color.white,
+                    ),
+                )
+            }
         }
 
         karooSystem.connect { connected ->
@@ -160,8 +177,8 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                         title = "Lights Toggled",
                         detail = "",
                         autoDismissMs = 2000,
-                        backgroundColor = Color.BLACK,
-                        textColor = Color.WHITE,
+                        backgroundColor = android.R.color.black,
+                        textColor = android.R.color.white,
                     ),
                 )
             }
@@ -174,11 +191,43 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                         title = "Light Mode Changed",
                         detail = "",
                         autoDismissMs = 2000,
-                        backgroundColor = Color.BLACK,
-                        textColor = Color.WHITE,
+                        backgroundColor = android.R.color.black,
+                        textColor = android.R.color.white,
                     ),
                 )
             }
+        }
+    }
+
+    private fun playNotificationSound() {
+        karooSystem.dispatch(
+            PlayBeepPattern(
+                listOf(
+                    PlayBeepPattern.Tone(frequency = 784, durationMs = 120),
+                    PlayBeepPattern.Tone(frequency = null, durationMs = 60),
+                    PlayBeepPattern.Tone(frequency = 988, durationMs = 120),
+                    PlayBeepPattern.Tone(frequency = null, durationMs = 60),
+                    PlayBeepPattern.Tone(frequency = 1319, durationMs = 250),
+                ),
+            ),
+        )
+    }
+
+    fun dispatchTestZoneAlert() {
+        extensionScope.launch {
+            kotlinx.coroutines.delay(5000)
+            playNotificationSound()
+            karooSystem.dispatch(
+                InRideAlert(
+                    id = "zone-change",
+                    icon = R.drawable.ic_firefly,
+                    title = "DAY → DUSK (Light sensor)",
+                    detail = "F: Steady Low\nR: Steady High",
+                    autoDismissMs = 10000,
+                    backgroundColor = android.R.color.black,
+                    textColor = android.R.color.white,
+                ),
+            )
         }
     }
 

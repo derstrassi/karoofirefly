@@ -95,6 +95,9 @@ class MainActivity : ComponentActivity() {
                         onDebugToggle = { enabled ->
                             KarooLightControllerExtension.getInstance()?.engine?.setDebugMode(enabled)
                         },
+                        onTestNotification = {
+                            KarooLightControllerExtension.getInstance()?.dispatchTestZoneAlert()
+                        },
                         onSetMode = { mode ->
                             KarooLightControllerExtension.getInstance()?.engine?.setDebugLightMode(mode)
                         },

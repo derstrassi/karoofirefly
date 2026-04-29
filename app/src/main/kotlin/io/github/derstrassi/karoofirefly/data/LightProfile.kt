@@ -51,6 +51,7 @@ data class LightControllerSettings(
     val lightControlMode: String = "MANUAL_ONLY",
     val ambientDarkThreshold: Int = 50,
     val ambientDimThreshold: Int = 200,
+    val zoneNotificationsEnabled: Boolean = true,
 ) {
     val controlMode: LightControlMode
         get() = try {

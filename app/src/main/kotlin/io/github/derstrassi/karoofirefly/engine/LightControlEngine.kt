@@ -43,6 +43,9 @@ class LightControlEngine(
     /** Callback to set light modes. Called with (frontKarooModeName, rearKarooModeName). */
     var onSetModes: ((String, String) -> Unit)? = null
 
+    /** Callback when the light zone changes. Called with (oldZone, newZone, reason, frontMode, rearMode). */
+    var onZoneChange: ((DayTimeZone, DayTimeZone, String, LightMode, LightMode) -> Unit)? = null
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var zoneCheckJob: Job? = null
     private var sensorObserveJob: Job? = null
@@ -139,7 +142,17 @@ class LightControlEngine(
         setModes(front, rear)
 
         if (zone != previousZone) {
-            Timber.d("Zone: $previousZone → $zone (front=${front.karooName}, rear=${rear.karooName})")
+            val reason = when (settings.controlMode) {
+                LightControlMode.TIME_BASED -> "Sunrise/Sunset"
+                LightControlMode.AMBIENT_LIGHT -> "Light sensor"
+                LightControlMode.COMBINED -> {
+                    val timeZone = timeController.getCurrentZone()
+                    if (zone != timeZone) "Light sensor" else "Sunrise/Sunset"
+                }
+                LightControlMode.MANUAL_ONLY -> "Manual"
+            }
+            Timber.d("Zone: $previousZone → $zone ($reason, front=${front.karooName}, rear=${rear.karooName})")
+            onZoneChange?.invoke(previousZone, zone, reason, front, rear)
         }
     }
 

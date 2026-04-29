@@ -53,6 +53,7 @@ fun SettingsScreen(
     onNavigateToProfiles: () -> Unit,
     onDebugToggle: (Boolean) -> Unit = {},
     onSetMode: (LightMode) -> Unit = {},
+    onTestNotification: () -> Unit = {},
 ) {
     var dawnOffset by remember(settings) { mutableFloatStateOf(settings.dawnOffsetMinutes.toFloat()) }
     var duskOffset by remember(settings) { mutableFloatStateOf(settings.duskOffsetMinutes.toFloat()) }
@@ -62,6 +63,7 @@ fun SettingsScreen(
     var useAmbientLight by remember(settings) { mutableStateOf(settings.useAmbientLight) }
     var darkThreshold by remember(settings) { mutableIntStateOf(settings.ambientDarkThreshold) }
     var dimThreshold by remember(settings) { mutableIntStateOf(settings.ambientDimThreshold) }
+    var zoneNotifications by remember(settings) { mutableStateOf(settings.zoneNotificationsEnabled) }
 
     fun saveSettings() {
         onSave(
@@ -73,6 +75,7 @@ fun SettingsScreen(
                 lightControlMode = LightControlMode.fromFlags(useTimeBased, useAmbientLight).name,
                 ambientDarkThreshold = darkThreshold,
                 ambientDimThreshold = dimThreshold,
+                zoneNotificationsEnabled = zoneNotifications,
             ),
         )
     }
@@ -235,6 +238,17 @@ fun SettingsScreen(
                 Text("Auto-off with ride", modifier = Modifier.weight(1f))
                 Switch(checked = autoOff, onCheckedChange = { autoOff = it; saveSettings() })
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Zone change notifications", modifier = Modifier.weight(1f))
+                Switch(checked = zoneNotifications, onCheckedChange = { zoneNotifications = it; saveSettings() })
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -262,6 +276,10 @@ fun SettingsScreen(
         }
 
         if (debugEnabled) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(onClick = onTestNotification, modifier = Modifier.fillMaxWidth()) {
+                Text("Test Zone Notification")
+            }
             Spacer(modifier = Modifier.height(8.dp))
             var debugModeExpanded by remember { mutableStateOf(false) }
             ExposedDropdownMenuBox(
