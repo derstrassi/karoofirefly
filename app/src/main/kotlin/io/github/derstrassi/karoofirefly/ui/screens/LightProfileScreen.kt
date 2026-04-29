@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -41,6 +40,19 @@ fun LightProfileScreen(
     var nightFront by remember(profile) { mutableIntStateOf(profile.nightModeFront) }
     var nightRear by remember(profile) { mutableIntStateOf(profile.nightModeRear) }
 
+    fun saveProfile() {
+        onSave(
+            LightProfile(
+                dayModeFront = dayFront,
+                dayModeRear = dayRear,
+                duskModeFront = duskFront,
+                duskModeRear = duskRear,
+                nightModeFront = nightFront,
+                nightModeRear = nightRear,
+            ),
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -58,44 +70,24 @@ fun LightProfileScreen(
 
         // Day
         Text("Day", style = MaterialTheme.typography.titleMedium)
-        ModeSelector("Front", dayFront) { dayFront = it }
-        ModeSelector("Rear", dayRear) { dayRear = it }
+        ModeSelector("Front", dayFront) { dayFront = it; saveProfile() }
+        ModeSelector("Rear", dayRear) { dayRear = it; saveProfile() }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         // Dusk/Dawn
         Text("Dusk / Dawn", style = MaterialTheme.typography.titleMedium)
-        ModeSelector("Front", duskFront) { duskFront = it }
-        ModeSelector("Rear", duskRear) { duskRear = it }
+        ModeSelector("Front", duskFront) { duskFront = it; saveProfile() }
+        ModeSelector("Rear", duskRear) { duskRear = it; saveProfile() }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         // Night
         Text("Night", style = MaterialTheme.typography.titleMedium)
-        ModeSelector("Front", nightFront) { nightFront = it }
-        ModeSelector("Rear", nightRear) { nightRear = it }
+        ModeSelector("Front", nightFront) { nightFront = it; saveProfile() }
+        ModeSelector("Rear", nightRear) { nightRear = it; saveProfile() }
 
         Spacer(modifier = Modifier.height(24.dp))
-
-        Button(
-            onClick = {
-                onSave(
-                    LightProfile(
-                        dayModeFront = dayFront,
-                        dayModeRear = dayRear,
-                        duskModeFront = duskFront,
-                        duskModeRear = duskRear,
-                        nightModeFront = nightFront,
-                        nightModeRear = nightRear,
-                    ),
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Save Profiles")
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
             Text("Back")

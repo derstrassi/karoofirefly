@@ -108,7 +108,6 @@ class MainActivity : ComponentActivity() {
                                     ext.engine.settings = ext.engine.settings.copy(profile = newProfile)
                                 }
                             }
-                            currentScreen = Screen.SETTINGS
                         },
                         onBack = { currentScreen = Screen.SETTINGS },
                     )

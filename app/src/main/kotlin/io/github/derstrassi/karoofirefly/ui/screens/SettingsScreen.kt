@@ -62,6 +62,20 @@ fun SettingsScreen(
     var darkThreshold by remember(settings) { mutableIntStateOf(settings.ambientDarkThreshold) }
     var dimThreshold by remember(settings) { mutableIntStateOf(settings.ambientDimThreshold) }
 
+    fun saveSettings() {
+        onSave(
+            settings.copy(
+                dawnOffsetMinutes = dawnOffset.toInt(),
+                duskOffsetMinutes = duskOffset.toInt(),
+                autoOnWithRide = autoOn,
+                autoOffWithRide = autoOff,
+                lightControlMode = LightControlMode.fromFlags(useTimeBased, useAmbientLight).name,
+                ambientDarkThreshold = darkThreshold,
+                ambientDimThreshold = dimThreshold,
+            ),
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -93,7 +107,7 @@ fun SettingsScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Time-based (sunrise/sunset)", modifier = Modifier.weight(1f))
-            Switch(checked = useTimeBased, onCheckedChange = { useTimeBased = it })
+            Switch(checked = useTimeBased, onCheckedChange = { useTimeBased = it; saveSettings() })
         }
 
         if (useTimeBased) {
@@ -107,6 +121,7 @@ fun SettingsScreen(
             Slider(
                 value = dawnOffset,
                 onValueChange = { dawnOffset = it },
+                onValueChangeFinished = { saveSettings() },
                 valueRange = -120f..120f,
                 steps = 23,
             )
@@ -121,6 +136,7 @@ fun SettingsScreen(
             Slider(
                 value = duskOffset,
                 onValueChange = { duskOffset = it },
+                onValueChangeFinished = { saveSettings() },
                 valueRange = -120f..120f,
                 steps = 23,
             )
@@ -134,7 +150,7 @@ fun SettingsScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Ambient Light Sensor", modifier = Modifier.weight(1f))
-            Switch(checked = useAmbientLight, onCheckedChange = { useAmbientLight = it })
+            Switch(checked = useAmbientLight, onCheckedChange = { useAmbientLight = it; saveSettings() })
         }
 
         if (useAmbientLight) {
@@ -155,6 +171,7 @@ fun SettingsScreen(
             Slider(
                 value = darkThreshold.toFloat(),
                 onValueChange = { darkThreshold = it.toInt() },
+                onValueChangeFinished = { saveSettings() },
                 valueRange = 10f..200f,
                 steps = 18,
             )
@@ -164,6 +181,7 @@ fun SettingsScreen(
             Slider(
                 value = dimThreshold.toFloat(),
                 onValueChange = { dimThreshold = it.toInt() },
+                onValueChangeFinished = { saveSettings() },
                 valueRange = 50f..500f,
                 steps = 44,
             )
@@ -179,7 +197,7 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("Auto-on with ride", modifier = Modifier.weight(1f))
-                Switch(checked = autoOn, onCheckedChange = { autoOn = it })
+                Switch(checked = autoOn, onCheckedChange = { autoOn = it; saveSettings() })
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -190,7 +208,7 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("Auto-off with ride", modifier = Modifier.weight(1f))
-                Switch(checked = autoOff, onCheckedChange = { autoOff = it })
+                Switch(checked = autoOff, onCheckedChange = { autoOff = it; saveSettings() })
             }
         }
 
@@ -256,25 +274,5 @@ fun SettingsScreen(
             Text("Light Profiles")
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Button(
-            onClick = {
-                onSave(
-                    settings.copy(
-                        dawnOffsetMinutes = dawnOffset.toInt(),
-                        duskOffsetMinutes = duskOffset.toInt(),
-                        autoOnWithRide = autoOn,
-                        autoOffWithRide = autoOff,
-                        lightControlMode = LightControlMode.fromFlags(useTimeBased, useAmbientLight).name,
-                        ambientDarkThreshold = darkThreshold,
-                        ambientDimThreshold = dimThreshold,
-                    ),
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Save")
-        }
     }
 }
