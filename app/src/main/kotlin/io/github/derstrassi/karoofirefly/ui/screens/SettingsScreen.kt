@@ -17,6 +17,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.Slider
@@ -116,37 +117,55 @@ fun SettingsScreen(
         }
 
         if (useTimeBased) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Column(modifier = Modifier.padding(start = 16.dp)) {
+                Spacer(modifier = Modifier.height(12.dp))
 
-            val dawnTimeText = sunriseTime?.let { sr ->
-                val start = (sr.clone() as Calendar).apply { add(Calendar.MINUTE, -dawnOffset.toInt()) }
-                " → from %02d:%02d".format(start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE))
-            } ?: ""
-            Text("Dawn Offset: ${dawnOffset.toInt()} min$dawnTimeText")
-            Slider(
-                value = dawnOffset,
-                onValueChange = { dawnOffset = it },
-                onValueChangeFinished = { saveSettings() },
-                valueRange = -120f..120f,
-                steps = 23,
-            )
+                val dawnTimeText = sunriseTime?.let { sr ->
+                    val start = (sr.clone() as Calendar).apply { add(Calendar.MINUTE, -dawnOffset.toInt()) }
+                    "%02d:%02d".format(start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE))
+                }
+                Text("Dawn Offset: ${dawnOffset.toInt()} min")
+                if (dawnTimeText != null) {
+                    Text(
+                        "Dusk zone starts at $dawnTimeText",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Slider(
+                    value = dawnOffset,
+                    onValueChange = { dawnOffset = it },
+                    onValueChangeFinished = { saveSettings() },
+                    valueRange = -120f..120f,
+                    steps = 23,
+                )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-            val duskTimeText = sunsetTime?.let { ss ->
-                val start = (ss.clone() as Calendar).apply { add(Calendar.MINUTE, -duskOffset.toInt()) }
-                " → from %02d:%02d".format(start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE))
-            } ?: ""
-            Text("Dusk Offset: ${duskOffset.toInt()} min$duskTimeText")
-            Slider(
-                value = duskOffset,
-                onValueChange = { duskOffset = it },
-                onValueChangeFinished = { saveSettings() },
-                valueRange = -120f..120f,
-                steps = 23,
-            )
+                val duskTimeText = sunsetTime?.let { ss ->
+                    val start = (ss.clone() as Calendar).apply { add(Calendar.MINUTE, -duskOffset.toInt()) }
+                    "%02d:%02d".format(start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE))
+                }
+                Text("Dusk Offset: ${duskOffset.toInt()} min")
+                if (duskTimeText != null) {
+                    Text(
+                        "Dusk zone starts at $duskTimeText",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Slider(
+                    value = duskOffset,
+                    onValueChange = { duskOffset = it },
+                    onValueChangeFinished = { saveSettings() },
+                    valueRange = -120f..120f,
+                    steps = 23,
+                )
+            }
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+        HorizontalDivider()
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(
@@ -159,43 +178,44 @@ fun SettingsScreen(
         }
 
         if (useAmbientLight) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                "Current: %.1f Lux".format(currentLux),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                "Sensor updates on movement only!",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Column(modifier = Modifier.padding(start = 16.dp)) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    "Current: %.1f Lux".format(currentLux),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    "Sensor updates on movement only!",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
 
-            Spacer(modifier = Modifier.height(12.dp))
-            Text("Night below: $darkThreshold Lux")
-            Slider(
-                value = darkThreshold.toFloat(),
-                onValueChange = { darkThreshold = it.toInt() },
-                onValueChangeFinished = { saveSettings() },
-                valueRange = 10f..200f,
-                steps = 18,
-            )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Night below: $darkThreshold Lux")
+                Slider(
+                    value = darkThreshold.toFloat(),
+                    onValueChange = { darkThreshold = it.toInt() },
+                    onValueChangeFinished = { saveSettings() },
+                    valueRange = 10f..200f,
+                    steps = 18,
+                )
 
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Day above: $dimThreshold Lux")
-            Slider(
-                value = dimThreshold.toFloat(),
-                onValueChange = { dimThreshold = it.toInt() },
-                onValueChangeFinished = { saveSettings() },
-                valueRange = 50f..500f,
-                steps = 44,
-            )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Day above: $dimThreshold Lux")
+                Slider(
+                    value = dimThreshold.toFloat(),
+                    onValueChange = { dimThreshold = it.toInt() },
+                    onValueChangeFinished = { saveSettings() },
+                    valueRange = 50f..500f,
+                    steps = 44,
+                )
+            }
         }
 
         if (useTimeBased || useAmbientLight) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Auto on/off toggles
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -217,7 +237,9 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Debug mode toggle
         var debugEnabled by remember { mutableStateOf(false) }
