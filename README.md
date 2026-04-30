@@ -15,13 +15,15 @@ ANT+ Smart Bike Light Controller extension for Hammerhead Karoo 3.
 Controls ANT+ bike lights paired through Karoo's native sensor settings. Unlike Karoo's built-in light support which only toggles on/off at ride start/stop, KarooFireFly sets specific light modes based on time of day.
 
 **What works:**
-- 4 light control modes: Manual only, Time-based, Ambient Light Sensor, Combined
+- Independent feature switches: Time-based and Ambient Light Sensor (enable one or both)
 - Automatic light mode switching based on time of day (sunrise/sunset calculation)
 - Ambient light sensor based mode switching (Karoo 3's built-in lux sensor)
-- Combined mode: time-based baseline with ambient sensor override (e.g. tunnels)
+- Combined mode (both enabled): time-based baseline with ambient sensor override (e.g. tunnels)
+- Zone change notifications with sound during rides (configurable)
 - Auto on with ride start, auto off with ride stop
+- Auto-save — all settings take effect immediately
 - Configurable light profiles per time zone (day / dusk / night)
-- Configurable dawn/dusk time offsets
+- Configurable dawn/dusk time offsets with calculated zone start times
 - Configurable lux thresholds for ambient light zones with live lux readout
 - Uses Karoo-paired lights — no separate pairing needed
 - BonusActions mappable to AXS shift buttons or Karoo hardware buttons:
@@ -39,29 +41,33 @@ The extension communicates with Karoo's SensorService via its internal AIDL inte
 
 ## Settings
 
-### Light Control Mode
+### Light Control
 
-Choose how lights are controlled:
+Enable one or both features independently via switches:
 
-| Mode | Description |
-|------|-------------|
-| **Off (BonusButton only)** | No automatic control — lights only respond to BonusButton presses |
-| **Time-based** | Automatic mode switching based on sunrise/sunset |
-| **Ambient Light Sensor** | Automatic mode switching based on Karoo's lux sensor |
-| **Combined** | Time-based baseline, sensor can darken but not brighten (e.g. tunnels) |
+| Feature | Description |
+|---------|-------------|
+| **Time-based (sunrise/sunset)** | Automatic mode switching based on sunrise/sunset calculation |
+| **Ambient Light Sensor** | Automatic mode switching based on Karoo 3's built-in lux sensor |
+
+When both are enabled, time-based acts as the baseline and the ambient sensor can only darken the zone (e.g. tunnel detection). When neither is enabled, lights only respond to BonusButton presses.
 
 <p align="center">
-  <img src="docs/settings_manual.png" width="240" alt="Manual mode">
+  <img src="docs/settings_manual.png" width="240" alt="Manual mode (both off)">
   <img src="docs/settings_timebased.png" width="240" alt="Time-based mode">
 </p>
 <p align="center">
   <img src="docs/settings_ambient.png" width="240" alt="Ambient light mode">
-  <img src="docs/settings_combined.png" width="240" alt="Combined mode">
+  <img src="docs/settings_combined.png" width="240" alt="Combined mode (both on)">
 </p>
+
+### Zone Change Notifications
+
+When enabled, an in-ride alert with sound is shown whenever the light zone changes (e.g. DAY → DUSK). The notification shows the reason (sunrise/sunset or light sensor) and the resulting light modes for front and rear.
 
 ### Light Profiles
 
-Configure which light mode to use for each time zone (Day, Dusk/Dawn, Night) with separate front and rear settings.
+Configure which light mode to use for each time zone (Day, Dusk/Dawn, Night) with separate front and rear settings. Changes are saved immediately.
 
 <p align="center">
   <img src="docs/settings_profiles.png" width="240" alt="Light profiles">
@@ -69,7 +75,7 @@ Configure which light mode to use for each time zone (Day, Dusk/Dawn, Night) wit
 
 ### Manual Override
 
-When using an auto mode (Time-based, Ambient, Combined), BonusButton presses temporarily override the automatic control. The override clears automatically when the light zone changes (e.g. sunset transition or exiting a tunnel) or when the ride state changes (pause/stop).
+When using an auto mode, BonusButton presses temporarily override the automatic control. The override clears automatically when the light zone changes (e.g. sunset transition or exiting a tunnel) or when the ride state changes (pause/stop).
 
 ## Architecture
 
