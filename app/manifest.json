@@ -1,0 +1,11 @@
+{
+  "label": "KarooFireFly",
+  "packageName": "io.github.derstrassi.karoofirefly",
+  "iconUrl": "https://raw.githubusercontent.com/derstrassi/karoofirefly/main/docs/ic_firefly.svg",
+  "latestApkUrl": "https://github.com/derstrassi/karoofirefly/releases/latest/download/karoo-light-controller-0.2.apk",
+  "latestVersion": "0.2",
+  "latestVersionCode": 2,
+  "developer": "Dennis Straßer",
+  "description": "Automatic ANT+ smart bike light control based on time of day and ambient light. Controls lights already paired through Karoo's native sensor settings — no separate pairing needed. Features independent time-based (sunrise/sunset) and ambient light sensor modes, configurable light profiles per zone (day/dusk/night), zone change notifications with sound, and manual override via BonusActions.",
+  "releaseNotes": "* Replace light control mode dropdown with independent feature switches\n* Add zone change notifications with sound during rides\n* Auto-save all settings immediately on change\n* Show dawn/dusk zone start times next to offset sliders\n* Improve settings layout with visual grouping and hierarchy\n* Fix InRideAlert color crash in ride app"
+}
