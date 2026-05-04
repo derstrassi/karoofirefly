@@ -297,6 +297,18 @@ fun SettingsScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text("Supported Lights", style = MaterialTheme.typography.titleSmall)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            "Any ANT+ smart bike light paired through Karoo's sensor settings. Tested with Magene L508. Expected to work with Garmin Varia, Bontrager Ion/Flare, and others.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(onClick = onNavigateToProfiles, modifier = Modifier.fillMaxWidth()) {
