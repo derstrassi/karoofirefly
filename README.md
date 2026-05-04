@@ -8,38 +8,43 @@ ANT+ Smart Bike Light Controller extension for Hammerhead Karoo 3.
 
 > **Early Development / Use at Your Own Risk**
 >
-> This extension is in early development and has only been tested with a **Magene L508** rear light on a Karoo 3. Other ANT+ lights (Garmin Varia, Bontrager Ion/Flare, etc.) should work but are untested. The extension uses an undocumented internal Karoo API that may break with firmware updates. Use at your own risk.
+> This extension uses an undocumented internal Karoo API that may break with firmware updates. Tested with Magene L508 and Garmin Varia RTL 515. Other ANT+ lights (Bontrager Ion/Flare, etc.) should work but are untested. Use at your own risk.
 
 ## Overview
 
-Controls ANT+ bike lights paired through Karoo's native sensor settings. Unlike Karoo's built-in light support which only toggles on/off at ride start/stop, KarooFireFly sets specific light modes based on time of day.
+Controls ANT+ bike lights paired through Karoo's native sensor settings. Unlike Karoo's built-in light support which only toggles on/off at ride start/stop, KarooFireFly sets specific light modes based on time of day and ambient light conditions.
 
-**What works:**
+**Features:**
+- Discover and assign paired lights as Front or Rear with manufacturer info
 - Independent feature switches: Time-based and Ambient Light Sensor (enable one or both)
-- Automatic light mode switching based on time of day (sunrise/sunset calculation)
-- Ambient light sensor based mode switching (Karoo 3's built-in lux sensor)
-- Combined mode (both enabled): time-based baseline with ambient sensor override (e.g. tunnels)
+- Automatic light mode switching based on time of day (sunrise/sunset with configurable offsets)
+- Ambient light sensor mode switching (Karoo 3's built-in lux sensor)
+- Combined mode: time-based baseline with ambient sensor override (e.g. tunnels)
+- Two zones: Day and Night with clear "Day starts at" / "Night starts at" times
 - Zone change notifications with sound during rides (configurable)
-- Auto on with ride start, auto off with ride stop
+- Auto on/off with ride start/stop
 - Auto-save — all settings take effect immediately
-- Configurable light profiles per time zone (day / dusk / night)
-- Configurable dawn/dusk time offsets with calculated zone start times
-- Configurable lux thresholds for ambient light zones with live lux readout
-- Uses Karoo-paired lights — no separate pairing needed
+- Configurable light profiles per zone (Day / Night) with separate front and rear modes
+- Multiple lights per role supported
 - BonusActions mappable to AXS shift buttons or Karoo hardware buttons:
   - **Toggle Lights** — turns all lights on/off
   - **Cycle Mode** — cycles through modes (Off → Steady High → Steady Low → Slow Flash → Fast Flash)
 
-**Planned / Not yet implemented:**
-- Graphical data field showing light status on the ride screen
-
 ## How It Works
 
-Pair your ANT+ lights through **Karoo's native sensor settings** (Settings > Sensors). When a ride starts, KarooFireFly automatically discovers the paired lights and controls their mode through Karoo's internal SensorService. No pairing UI in the extension — just configure your light profiles and time offsets.
+Pair your ANT+ lights through **Karoo's native sensor settings** (Settings > Sensors). KarooFireFly discovers paired lights and shows them in the Connected Lights section where you assign each light as Front or Rear. When a ride starts, the extension automatically controls their mode based on your settings.
 
 The extension communicates with Karoo's SensorService via its internal AIDL interface to send light mode commands. This means the extension works with whatever lights Karoo has already paired and connected — no need for separate ANT+ channel management.
 
 ## Settings
+
+### Connected Lights
+
+Discovered ANT+ lights are shown with their name and manufacturer. Assign each light as Front, Rear, or None.
+
+<p align="center">
+  <img src="docs/settings_lights.png" width="240" alt="Connected Lights">
+</p>
 
 ### Light Control
 
@@ -47,27 +52,23 @@ Enable one or both features independently via switches:
 
 | Feature | Description |
 |---------|-------------|
-| **Time-based (sunrise/sunset)** | Automatic mode switching based on sunrise/sunset calculation |
+| **Time-based (sunrise/sunset)** | Automatic mode switching at configurable times relative to sunrise/sunset |
 | **Ambient Light Sensor** | Automatic mode switching based on Karoo 3's built-in lux sensor |
 
 When both are enabled, time-based acts as the baseline and the ambient sensor can only darken the zone (e.g. tunnel detection). When neither is enabled, lights only respond to BonusButton presses.
 
 <p align="center">
-  <img src="docs/settings_manual.png" width="240" alt="Manual mode (both off)">
   <img src="docs/settings_timebased.png" width="240" alt="Time-based mode">
-</p>
-<p align="center">
   <img src="docs/settings_ambient.png" width="240" alt="Ambient light mode">
-  <img src="docs/settings_combined.png" width="240" alt="Combined mode (both on)">
 </p>
 
 ### Zone Change Notifications
 
-When enabled, an in-ride alert with sound is shown whenever the light zone changes (e.g. DAY → DUSK). The notification shows the reason (sunrise/sunset or light sensor) and the resulting light modes for front and rear.
+When enabled, an in-ride alert with sound is shown whenever the light zone changes (e.g. DAY → NIGHT). The notification shows the reason (sunrise/sunset or light sensor) and the resulting light modes for front and rear.
 
 ### Light Profiles
 
-Configure which light mode to use for each time zone (Day, Dusk/Dawn, Night) with separate front and rear settings. Changes are saved immediately.
+Configure which light mode to use for each zone (Day, Night) with separate front and rear settings. Changes are saved immediately.
 
 <p align="center">
   <img src="docs/settings_profiles.png" width="240" alt="Light profiles">
@@ -75,7 +76,7 @@ Configure which light mode to use for each time zone (Day, Dusk/Dawn, Night) wit
 
 ### Manual Override
 
-When using an auto mode, BonusButton presses temporarily override the automatic control. The override clears automatically when the light zone changes (e.g. sunset transition or exiting a tunnel) or when the ride state changes (pause/stop).
+When using an auto mode, BonusButton presses temporarily override the automatic control. The override clears automatically when the light zone changes or when the ride state changes (pause/stop).
 
 ## Architecture
 
@@ -83,7 +84,7 @@ When using an auto mode, BonusButton presses temporarily override the automatic 
 
 1. **Karoo Integration** (`karoo/`) — SensorService AIDL binding, light mode commands
 2. **Engine** (`engine/`) — State machine, sunrise/sunset calculation, ambient light sensor
-3. **Data** (`data/`) — DataStore settings, light profiles
+3. **Data** (`data/`) — DataStore settings, light profiles, light assignments
 4. **Extension** (`KarooLightControllerExtension.kt`) — KarooExtension service, entry point
 5. **DataTypes** (`datatypes/`) — Graphical data field for ride screen
 6. **UI** (`ui/`) — Jetpack Compose settings/profile screens
@@ -92,9 +93,9 @@ When using an auto mode, BonusButton presses temporarily override the automatic 
 
 1. **Manual Override** — BonusAction pressed, holds until zone change or ride state change
 2. **Auto Mode** — Zone determined by configured control mode:
-   - *Time-based:* sunrise/sunset calculation
+   - *Time-based:* sunrise/sunset with configurable offsets (±3 hours)
    - *Ambient Light:* lux sensor with smoothing (10s moving average) and hysteresis (10s dwell time)
-   - *Combined:* time-based baseline, sensor can darken but not brighten (e.g. tunnel → NIGHT, but headlights at night stay NIGHT)
+   - *Combined:* time-based baseline, sensor can darken but not brighten (e.g. tunnel → NIGHT)
 3. **Ride State** — Lights off when ride ends
 
 ## Development Setup
