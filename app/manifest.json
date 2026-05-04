@@ -2,10 +2,10 @@
   "label": "KarooFireFly",
   "packageName": "io.github.derstrassi.karoofirefly",
   "iconUrl": "https://raw.githubusercontent.com/derstrassi/karoofirefly/main/docs/ic_firefly.svg",
-  "latestApkUrl": "https://github.com/derstrassi/karoofirefly/releases/latest/download/karoo-light-controller-0.4.apk",
-  "latestVersion": "0.4",
-  "latestVersionCode": 5,
+  "latestApkUrl": "https://github.com/derstrassi/karoofirefly/releases/latest/download/karoo-light-controller-0.4.1.apk",
+  "latestVersion": "0.4.1",
+  "latestVersionCode": 6,
   "developer": "Dennis Straßer",
   "description": "Automatic ANT+ smart bike light control based on time of day and ambient light. Tested with Magene L508 and Garmin Varia RTL 515/516. Controls lights already paired through Karoo's native sensor settings — no separate pairing needed. Features manual front/rear light assignment, time-based (sunrise/sunset) and ambient light sensor modes, configurable light profiles per zone (day/night), zone change notifications with sound, and manual override via BonusActions.",
-  "releaseNotes": "* Manual front/rear light assignment — supports multiple lights\n* Auto-discovery of paired ANT+ lights with manufacturer info\n* Tested with Garmin Varia RTL 515/516\n* Fixed bug where only one light was controlled"
+  "releaseNotes": "* Cycle Mode now cycles through Day/Night profiles instead of individual modes\n* Toggle and Cycle skip zones with OFF profiles\n* BonusAction alerts show for 3s instead of 10s"
 }
