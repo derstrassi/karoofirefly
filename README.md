@@ -14,6 +14,16 @@ ANT+ Smart Bike Light Controller extension for Hammerhead Karoo 3.
 
 Controls ANT+ bike lights paired through Karoo's native sensor settings. Unlike Karoo's built-in light support which only toggles on/off at ride start/stop, KarooFireFly sets specific light modes based on time of day and ambient light conditions.
 
+**Supported Lights:**
+
+| Light | Status |
+|-------|--------|
+| Magene L508 | ✅ Tested |
+| Garmin Varia RTL 515/516 | ✅ Tested |
+| Garmin Varia UT800 / Varia HL500 | Should work (untested) |
+| Bontrager Ion / Flare RT | Should work (untested) |
+| Any ANT+ smart bike light | Should work if paired through Karoo |
+
 **Features:**
 - Discover and assign paired lights as Front or Rear with manufacturer info
 - Independent feature switches: Time-based and Ambient Light Sensor (enable one or both)
@@ -28,7 +38,7 @@ Controls ANT+ bike lights paired through Karoo's native sensor settings. Unlike 
 - Multiple lights per role supported
 - BonusActions mappable to AXS shift buttons or Karoo hardware buttons:
   - **Toggle Lights** — turns all lights on/off
-  - **Cycle Mode** — cycles through modes (Off → Steady High → Steady Low → Slow Flash → Fast Flash)
+  - **Cycle Mode** — cycles through configured profiles (Off → Day → Night → Off)
 
 ## How It Works
 
