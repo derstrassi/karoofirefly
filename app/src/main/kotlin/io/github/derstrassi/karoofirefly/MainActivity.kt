@@ -72,10 +72,13 @@ class MainActivity : ComponentActivity() {
 
                 val luxValue by luxFlow.collectAsState(initial = luxSensor.currentLux.value)
                 val frontMode by frontModeFlow.collectAsState(initial = LightMode.OFF)
+                val lights = KarooLightControllerExtension.getInstance()
+                    ?.discoveredLights?.collectAsState(initial = emptyList())?.value ?: emptyList()
 
                 when (currentScreen) {
                     Screen.SETTINGS -> SettingsScreen(
                         settings = settings,
+                        discoveredLights = lights,
                         currentLux = luxValue,
                         currentLightMode = frontMode,
                         sunriseTime = KarooLightControllerExtension.getInstance()?.timeController?.getSunriseTime(),

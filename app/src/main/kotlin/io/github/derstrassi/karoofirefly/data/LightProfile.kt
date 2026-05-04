@@ -16,6 +16,16 @@ enum class DayTimeZone {
     NIGHT,
 }
 
+@Serializable
+enum class LightRole { FRONT, REAR }
+
+@Serializable
+data class LightAssignment(
+    val deviceId: String,
+    val deviceName: String,
+    val role: LightRole,
+)
+
 enum class LightControlMode {
     MANUAL_ONLY,
     TIME_BASED,
@@ -45,6 +55,7 @@ data class LightControllerSettings(
     val lightControlMode: String = "MANUAL_ONLY",
     val ambientNightThreshold: Int = 50,
     val zoneNotificationsEnabled: Boolean = true,
+    val lightAssignments: List<LightAssignment> = emptyList(),
 ) {
     val controlMode: LightControlMode
         get() = try {

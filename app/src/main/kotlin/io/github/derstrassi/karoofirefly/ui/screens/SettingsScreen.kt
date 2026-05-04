@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -35,16 +36,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import io.github.derstrassi.karoofirefly.DiscoveredLight
 import io.github.derstrassi.karoofirefly.R
 import io.github.derstrassi.karoofirefly.ant.LightMode
+import io.github.derstrassi.karoofirefly.data.LightAssignment
 import io.github.derstrassi.karoofirefly.data.LightControlMode
 import io.github.derstrassi.karoofirefly.data.LightControllerSettings
+import io.github.derstrassi.karoofirefly.data.LightRole
 import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     settings: LightControllerSettings,
+    discoveredLights: List<DiscoveredLight> = emptyList(),
     currentLux: Float = 0f,
     currentLightMode: LightMode = LightMode.OFF,
     sunriseTime: Calendar? = null,
@@ -103,6 +108,42 @@ fun SettingsScreen(
         )
 
         Spacer(modifier = Modifier.height(24.dp))
+
+        // Connected Lights
+        Text("Connected Lights", style = MaterialTheme.typography.titleSmall)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (discoveredLights.isEmpty()) {
+            Text(
+                "No lights found. Pair lights in Karoo's sensor settings.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            for (light in discoveredLights) {
+                val currentAssignment = settings.lightAssignments.find { it.deviceId == light.id }
+                LightRoleSelector(
+                    lightName = light.name,
+                    currentRole = currentAssignment?.role,
+                    onRoleSelected = { role ->
+                        val updatedAssignments = settings.lightAssignments
+                            .filter { it.deviceId != light.id }
+                            .let { list ->
+                                if (role != null) {
+                                    list + LightAssignment(light.id, light.name, role)
+                                } else {
+                                    list
+                                }
+                            }
+                        onSave(settings.copy(lightAssignments = updatedAssignments))
+                    },
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Light Control Mode switches
         Text("Light Control", style = MaterialTheme.typography.titleSmall)
@@ -297,23 +338,64 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-        HorizontalDivider()
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text("Supported Lights", style = MaterialTheme.typography.titleSmall)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            "Any ANT+ smart bike light paired through Karoo's sensor settings. Tested with Magene L508. Expected to work with Garmin Varia, Bontrager Ion/Flare, and others.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(onClick = onNavigateToProfiles, modifier = Modifier.fillMaxWidth()) {
             Text("Light Profiles")
         }
 
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LightRoleSelector(
+    lightName: String,
+    currentRole: LightRole?,
+    onRoleSelected: (LightRole?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val roleLabel = when (currentRole) {
+        LightRole.FRONT -> "Front"
+        LightRole.REAR -> "Rear"
+        null -> "None"
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(lightName, modifier = Modifier.weight(1f))
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = it },
+        ) {
+            TextField(
+                value = roleLabel,
+                onValueChange = {},
+                readOnly = true,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).width(120.dp),
+                textStyle = MaterialTheme.typography.bodySmall,
+            )
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Front") },
+                    onClick = { onRoleSelected(LightRole.FRONT); expanded = false },
+                )
+                DropdownMenuItem(
+                    text = { Text("Rear") },
+                    onClick = { onRoleSelected(LightRole.REAR); expanded = false },
+                )
+                DropdownMenuItem(
+                    text = { Text("None") },
+                    onClick = { onRoleSelected(null); expanded = false },
+                )
+            }
+        }
     }
 }

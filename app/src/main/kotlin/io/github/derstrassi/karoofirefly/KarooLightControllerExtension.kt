@@ -8,6 +8,7 @@ import io.hammerhead.karooext.models.OnLocationChanged
 import io.hammerhead.karooext.models.RideState
 import io.hammerhead.karooext.models.SavedDevices
 import io.github.derstrassi.karoofirefly.karoo.KarooLightControl
+import io.github.derstrassi.karoofirefly.data.LightRole
 import io.github.derstrassi.karoofirefly.data.PreferencesRepository
 import io.github.derstrassi.karoofirefly.datatypes.LightStatusDataType
 import io.github.derstrassi.karoofirefly.engine.AmbientLightSensor
@@ -17,9 +18,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
+
+data class DiscoveredLight(val id: String, val name: String)
 
 class KarooLightControllerExtension : KarooExtension("karoo-light-controller", BuildConfig.VERSION_NAME) {
 
@@ -44,8 +49,9 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
     internal lateinit var engine: LightControlEngine
     internal lateinit var repository: PreferencesRepository
 
-    @Volatile private var frontLightId: String? = null
-    @Volatile private var rearLightId: String? = null
+    private val _discoveredLights = MutableStateFlow<List<DiscoveredLight>>(emptyList())
+    val discoveredLights: StateFlow<List<DiscoveredLight>> = _discoveredLights
+
     private var savedDevicesConsumerId: String? = null
 
     private val extensionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -65,14 +71,18 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         ambientLightSensor = AmbientLightSensor(applicationContext)
         engine = LightControlEngine(timeController, ambientLightSensor)
 
-        // Wire engine mode changes to Karoo's SensorService
         engine.onSetModes = { frontMode, rearMode ->
-            frontLightId?.let { lightControl.setLightMode(it, frontMode) }
-            rearLightId?.let { lightControl.setLightMode(it, rearMode) }
+            for (assignment in engine.settings.lightAssignments) {
+                val mode = when (assignment.role) {
+                    LightRole.FRONT -> frontMode
+                    LightRole.REAR -> rearMode
+                }
+                lightControl.setLightMode(assignment.deviceId, mode)
+            }
         }
 
         engine.onZoneChange = { oldZone, newZone, reason, frontMode, rearMode ->
-            if (engine.settings.zoneNotificationsEnabled && engine.state.value != LightControlEngine.EngineState.IDLE && (frontLightId != null || rearLightId != null)) {
+            if (engine.settings.zoneNotificationsEnabled && engine.state.value != LightControlEngine.EngineState.IDLE && engine.settings.lightAssignments.isNotEmpty()) {
                 playNotificationSound()
                 karooSystem.dispatch(
                     InRideAlert(
@@ -113,7 +123,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         when (state) {
             is RideState.Recording -> {
                 engine.onRideStart()
-                if (frontLightId == null && rearLightId == null) {
+                if (_discoveredLights.value.isEmpty()) {
                     discoverKarooLights()
                 }
             }
@@ -132,9 +142,6 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         }
     }
 
-    /**
-     * Query Karoo's saved devices for ANT+ Bike Lights.
-     */
     internal fun discoverKarooLights() {
         savedDevicesConsumerId?.let { karooSystem.removeConsumer(it) }
         extensionScope.launch {
@@ -142,25 +149,15 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
             savedDevicesConsumerId = karooSystem.addConsumer<SavedDevices> { savedDevices ->
                 val lights = savedDevices.devices.filter { device ->
                     device.supportedDataTypes.contains(BIKE_LIGHT_DATA_TYPE) && device.enabled
-                }
-
-                Timber.d("$TAG: Found ${lights.size} saved bike light(s)")
-
-                for (device in lights) {
+                }.filter { device ->
                     val parts = device.id.split("-")
-                    if (parts.size >= 3) {
-                        val deviceType = parts[1].toIntOrNull()
-                        if (deviceType == DEVICE_TYPE_BIKE_LIGHT) {
-                            if (frontLightId == null) {
-                                frontLightId = device.id
-                                Timber.d("$TAG: Front light: ${device.name} (${device.id})")
-                            } else if (rearLightId == null) {
-                                rearLightId = device.id
-                                Timber.d("$TAG: Rear light: ${device.name} (${device.id})")
-                            }
-                        }
-                    }
+                    parts.size >= 3 && parts[1].toIntOrNull() == DEVICE_TYPE_BIKE_LIGHT
                 }
+
+                val discovered = lights.map { DiscoveredLight(it.id, it.name) }
+                _discoveredLights.value = discovered
+
+                Timber.d("$TAG: Found ${discovered.size} bike light(s): ${discovered.joinToString { "${it.name} (${it.id})" }}")
             }
         }
     }
@@ -221,7 +218,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                 InRideAlert(
                     id = "zone-change",
                     icon = R.drawable.ic_firefly,
-                    title = "DAY → DUSK (Light sensor)",
+                    title = "DAY → NIGHT (Light sensor)",
                     detail = "F: Steady Low\nR: Steady High",
                     autoDismissMs = 10000,
                     backgroundColor = android.R.color.black,
