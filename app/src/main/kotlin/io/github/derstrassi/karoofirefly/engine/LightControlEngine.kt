@@ -100,21 +100,53 @@ class LightControlEngine(
         if (_currentFrontMode.value != LightMode.OFF || _currentRearMode.value != LightMode.OFF) {
             setModes(LightMode.OFF, LightMode.OFF)
         } else {
-            val (front, rear) = getModesForZone(zone, settings.profile)
-            setModes(
-                LightMode.fromModeNumber(front) ?: LightMode.OFF,
-                LightMode.fromModeNumber(rear) ?: LightMode.OFF,
-            )
+            val (front, rear) = resolveOnModes(zone)
+            setModes(front, rear)
         }
+    }
+
+    private fun resolveOnModes(zone: DayTimeZone): Pair<LightMode, LightMode> {
+        val (f, r) = getModesForZone(zone, settings.profile)
+        val front = LightMode.fromModeNumber(f) ?: LightMode.OFF
+        val rear = LightMode.fromModeNumber(r) ?: LightMode.OFF
+        if (front != LightMode.OFF || rear != LightMode.OFF) return Pair(front, rear)
+
+        val otherZone = if (zone == DayTimeZone.DAY) DayTimeZone.NIGHT else DayTimeZone.DAY
+        val (of, or2) = getModesForZone(otherZone, settings.profile)
+        val otherFront = LightMode.fromModeNumber(of) ?: LightMode.OFF
+        val otherRear = LightMode.fromModeNumber(or2) ?: LightMode.OFF
+        if (otherFront != LightMode.OFF || otherRear != LightMode.OFF) return Pair(otherFront, otherRear)
+
+        return Pair(LightMode.STEADY_HIGH, LightMode.STEADY_HIGH)
     }
 
     fun onCycleMode() {
         _state.value = EngineState.MANUAL_OVERRIDE
         overrideZone = determineCurrentZone()
-        val modes = LightMode.CYCLING_MODES
-        val idx = modes.indexOf(_currentFrontMode.value)
-        val nextMode = modes[(idx + 1) % modes.size]
-        setModes(nextMode, nextMode)
+
+        val profile = settings.profile
+        val dayFront = LightMode.fromModeNumber(profile.dayModeFront) ?: LightMode.OFF
+        val dayRear = LightMode.fromModeNumber(profile.dayModeRear) ?: LightMode.OFF
+        val nightFront = LightMode.fromModeNumber(profile.nightModeFront) ?: LightMode.OFF
+        val nightRear = LightMode.fromModeNumber(profile.nightModeRear) ?: LightMode.OFF
+        val dayIsOff = dayFront == LightMode.OFF && dayRear == LightMode.OFF
+        val nightIsOff = nightFront == LightMode.OFF && nightRear == LightMode.OFF
+        val currentlyOff = _currentFrontMode.value == LightMode.OFF && _currentRearMode.value == LightMode.OFF
+
+        when {
+            currentlyOff -> {
+                if (!dayIsOff) setModes(dayFront, dayRear)
+                else if (!nightIsOff) setModes(nightFront, nightRear)
+                else setModes(LightMode.STEADY_HIGH, LightMode.STEADY_HIGH)
+            }
+            !dayIsOff && _currentFrontMode.value == dayFront && _currentRearMode.value == dayRear -> {
+                if (!nightIsOff) setModes(nightFront, nightRear)
+                else setModes(LightMode.OFF, LightMode.OFF)
+            }
+            else -> {
+                setModes(LightMode.OFF, LightMode.OFF)
+            }
+        }
     }
 
     private fun applyAutoMode() {

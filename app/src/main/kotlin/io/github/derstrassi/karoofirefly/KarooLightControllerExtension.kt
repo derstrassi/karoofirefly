@@ -7,6 +7,7 @@ import io.hammerhead.karooext.models.PlayBeepPattern
 import io.hammerhead.karooext.models.OnLocationChanged
 import io.hammerhead.karooext.models.RideState
 import io.hammerhead.karooext.models.SavedDevices
+import io.github.derstrassi.karoofirefly.ant.LightMode
 import io.github.derstrassi.karoofirefly.karoo.KarooLightControl
 import io.github.derstrassi.karoofirefly.data.LightRole
 import io.github.derstrassi.karoofirefly.data.PreferencesRepository
@@ -173,7 +174,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                         icon = R.drawable.ic_firefly,
                         title = "Lights Toggled",
                         detail = "",
-                        autoDismissMs = 2000,
+                        autoDismissMs = 3000,
                         backgroundColor = android.R.color.black,
                         textColor = android.R.color.white,
                     ),
@@ -181,13 +182,20 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
             }
             "cycle-mode" -> {
                 engine.onCycleMode()
+                val front = engine.currentFrontMode.value
+                val rear = engine.currentRearMode.value
+                val detail = if (front == LightMode.OFF && rear == LightMode.OFF) {
+                    "Lights Off"
+                } else {
+                    "F: ${front.displayName}\nR: ${rear.displayName}"
+                }
                 karooSystem.dispatch(
                     InRideAlert(
                         id = "light-mode",
                         icon = R.drawable.ic_firefly,
                         title = "Light Mode Changed",
-                        detail = "",
-                        autoDismissMs = 2000,
+                        detail = detail,
+                        autoDismissMs = 3000,
                         backgroundColor = android.R.color.black,
                         textColor = android.R.color.white,
                     ),
