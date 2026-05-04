@@ -8,7 +8,7 @@ ANT+ Smart Bike Light Controller extension for Hammerhead Karoo 3.
 
 > **Early Development / Use at Your Own Risk**
 >
-> This extension uses an undocumented internal Karoo API that may break with firmware updates. Tested with Magene L508 and Garmin Varia RTL 515. Other ANT+ lights (Bontrager Ion/Flare, etc.) should work but are untested. Use at your own risk.
+> This extension uses an undocumented internal Karoo API that may break with firmware updates. Tested with Magene L508 and Garmin Varia RTL 515/516. Other ANT+ lights (Bontrager Ion/Flare, etc.) should work but are untested. Use at your own risk.
 
 ## Overview
 

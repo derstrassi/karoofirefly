@@ -6,6 +6,6 @@
   "latestVersion": "0.3",
   "latestVersionCode": 4,
   "developer": "Dennis Straßer",
-  "description": "Automatic ANT+ smart bike light control based on time of day and ambient light. Controls lights already paired through Karoo's native sensor settings — no separate pairing needed. Features independent time-based (sunrise/sunset) and ambient light sensor modes, configurable light profiles per zone (day/dusk/night), zone change notifications with sound, and manual override via BonusActions.",
+  "description": "Automatic ANT+ smart bike light control based on time of day and ambient light. Tested with Magene L508 and Garmin Varia RTL 515/516. Controls lights already paired through Karoo's native sensor settings — no separate pairing needed. Features manual front/rear light assignment, time-based (sunrise/sunset) and ambient light sensor modes, configurable light profiles per zone (day/night), zone change notifications with sound, and manual override via BonusActions.",
   "releaseNotes": "* Simplified to two zones (Day/Night) — removed confusing Dusk zone\n* Offset sliders now show clear \"Day starts at\" / \"Night starts at\" times\n* Ambient light sensor simplified to single threshold\n* Added supported lights info to settings screen"
 }
