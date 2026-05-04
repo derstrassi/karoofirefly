@@ -24,7 +24,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
-data class DiscoveredLight(val id: String, val name: String)
+data class DiscoveredLight(val id: String, val name: String, val manufacturer: String? = null)
 
 class KarooLightControllerExtension : KarooExtension("karoo-light-controller", BuildConfig.VERSION_NAME) {
 
@@ -154,7 +154,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                     parts.size >= 3 && parts[1].toIntOrNull() == DEVICE_TYPE_BIKE_LIGHT
                 }
 
-                val discovered = lights.map { DiscoveredLight(it.id, it.name) }
+                val discovered = lights.map { DiscoveredLight(it.id, it.name, it.details?.manufacturer) }
                 _discoveredLights.value = discovered
 
                 Timber.d("$TAG: Found ${discovered.size} bike light(s): ${discovered.joinToString { "${it.name} (${it.id})" }}")

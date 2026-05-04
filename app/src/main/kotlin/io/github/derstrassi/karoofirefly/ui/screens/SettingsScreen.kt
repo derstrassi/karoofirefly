@@ -123,7 +123,7 @@ fun SettingsScreen(
             for (light in discoveredLights) {
                 val currentAssignment = settings.lightAssignments.find { it.deviceId == light.id }
                 LightRoleSelector(
-                    lightName = light.name,
+                    light = light,
                     currentRole = currentAssignment?.role,
                     onRoleSelected = { role ->
                         val updatedAssignments = settings.lightAssignments
@@ -350,7 +350,7 @@ fun SettingsScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LightRoleSelector(
-    lightName: String,
+    light: DiscoveredLight,
     currentRole: LightRole?,
     onRoleSelected: (LightRole?) -> Unit,
 ) {
@@ -358,7 +358,7 @@ private fun LightRoleSelector(
     val roleLabel = when (currentRole) {
         LightRole.FRONT -> "Front"
         LightRole.REAR -> "Rear"
-        null -> "None"
+        null -> "—"
     }
 
     Row(
@@ -366,7 +366,16 @@ private fun LightRoleSelector(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(lightName, modifier = Modifier.weight(1f))
+        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+            Text(light.name)
+            if (light.manufacturer != null) {
+                Text(
+                    light.manufacturer,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         ExposedDropdownMenuBox(
             expanded = expanded,
             onExpandedChange = { expanded = it },
@@ -376,7 +385,7 @@ private fun LightRoleSelector(
                 onValueChange = {},
                 readOnly = true,
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).width(120.dp),
+                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).width(110.dp),
                 textStyle = MaterialTheme.typography.bodySmall,
             )
             ExposedDropdownMenu(
