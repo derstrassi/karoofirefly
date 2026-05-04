@@ -61,8 +61,7 @@ fun SettingsScreen(
     var autoOff by remember(settings) { mutableStateOf(settings.autoOffWithRide) }
     var useTimeBased by remember(settings) { mutableStateOf(settings.useTimeBased) }
     var useAmbientLight by remember(settings) { mutableStateOf(settings.useAmbientLight) }
-    var darkThreshold by remember(settings) { mutableIntStateOf(settings.ambientDarkThreshold) }
-    var dimThreshold by remember(settings) { mutableIntStateOf(settings.ambientDimThreshold) }
+    var nightThreshold by remember(settings) { mutableIntStateOf(settings.ambientNightThreshold) }
     var zoneNotifications by remember(settings) { mutableStateOf(settings.zoneNotificationsEnabled) }
 
     fun saveSettings() {
@@ -73,8 +72,7 @@ fun SettingsScreen(
                 autoOnWithRide = autoOn,
                 autoOffWithRide = autoOff,
                 lightControlMode = LightControlMode.fromFlags(useTimeBased, useAmbientLight).name,
-                ambientDarkThreshold = darkThreshold,
-                ambientDimThreshold = dimThreshold,
+                ambientNightThreshold = nightThreshold,
                 zoneNotificationsEnabled = zoneNotifications,
             ),
         )
@@ -123,46 +121,42 @@ fun SettingsScreen(
             Column(modifier = Modifier.padding(start = 16.dp)) {
                 Spacer(modifier = Modifier.height(12.dp))
 
-                val dawnTimeText = sunriseTime?.let { sr ->
-                    val start = (sr.clone() as Calendar).apply { add(Calendar.MINUTE, -dawnOffset.toInt()) }
+                val dayStartText = sunriseTime?.let { sr ->
+                    val start = (sr.clone() as Calendar).apply { add(Calendar.MINUTE, dawnOffset.toInt()) }
                     "%02d:%02d".format(start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE))
                 }
-                Text("Dawn Offset: ${dawnOffset.toInt()} min")
-                if (dawnTimeText != null) {
-                    Text(
-                        "Dusk zone starts at $dawnTimeText",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Text("Day starts at: ${dayStartText ?: "—"}")
+                Text(
+                    "Offset: ${dawnOffset.toInt()} min from sunrise",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Slider(
                     value = dawnOffset,
                     onValueChange = { dawnOffset = it },
                     onValueChangeFinished = { saveSettings() },
-                    valueRange = -120f..120f,
-                    steps = 23,
+                    valueRange = -180f..180f,
+                    steps = 35,
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                val duskTimeText = sunsetTime?.let { ss ->
-                    val start = (ss.clone() as Calendar).apply { add(Calendar.MINUTE, -duskOffset.toInt()) }
+                val nightStartText = sunsetTime?.let { ss ->
+                    val start = (ss.clone() as Calendar).apply { add(Calendar.MINUTE, duskOffset.toInt()) }
                     "%02d:%02d".format(start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE))
                 }
-                Text("Dusk Offset: ${duskOffset.toInt()} min")
-                if (duskTimeText != null) {
-                    Text(
-                        "Dusk zone starts at $duskTimeText",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Text("Night starts at: ${nightStartText ?: "—"}")
+                Text(
+                    "Offset: ${duskOffset.toInt()} min from sunset",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Slider(
                     value = duskOffset,
                     onValueChange = { duskOffset = it },
                     onValueChangeFinished = { saveSettings() },
-                    valueRange = -120f..120f,
-                    steps = 23,
+                    valueRange = -180f..180f,
+                    steps = 35,
                 )
             }
         }
@@ -195,23 +189,13 @@ fun SettingsScreen(
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
-                Text("Night below: $darkThreshold Lux")
+                Text("Night below: $nightThreshold Lux")
                 Slider(
-                    value = darkThreshold.toFloat(),
-                    onValueChange = { darkThreshold = it.toInt() },
+                    value = nightThreshold.toFloat(),
+                    onValueChange = { nightThreshold = it.toInt() },
                     onValueChangeFinished = { saveSettings() },
-                    valueRange = 10f..200f,
-                    steps = 18,
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Day above: $dimThreshold Lux")
-                Slider(
-                    value = dimThreshold.toFloat(),
-                    onValueChange = { dimThreshold = it.toInt() },
-                    onValueChangeFinished = { saveSettings() },
-                    valueRange = 50f..500f,
-                    steps = 44,
+                    valueRange = 10f..500f,
+                    steps = 48,
                 )
             }
         }

@@ -35,8 +35,7 @@ class AmbientLightSensor(context: Context) : SensorEventListener {
     private val luxBuffer = ArrayDeque<Float>(SMOOTHING_WINDOW_SIZE)
     private var lastZoneChangeTime = 0L
 
-    var darkThreshold: Int = 50
-    var dimThreshold: Int = 200
+    var nightThreshold: Int = 50
 
     val isAvailable: Boolean get() = lightSensor != null
 
@@ -90,10 +89,6 @@ class AmbientLightSensor(context: Context) : SensorEventListener {
     }
 
     private fun categorize(lux: Float): DayTimeZone {
-        return when {
-            lux < darkThreshold -> DayTimeZone.NIGHT
-            lux < dimThreshold -> DayTimeZone.DUSK
-            else -> DayTimeZone.DAY
-        }
+        return if (lux < nightThreshold) DayTimeZone.NIGHT else DayTimeZone.DAY
     }
 }

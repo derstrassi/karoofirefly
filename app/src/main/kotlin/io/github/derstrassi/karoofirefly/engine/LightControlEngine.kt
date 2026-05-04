@@ -188,8 +188,7 @@ class LightControlEngine(
     fun updateAmbientSensor() {
         ambientLightSensor?.let {
             if (settings.controlMode == LightControlMode.AMBIENT_LIGHT || settings.controlMode == LightControlMode.COMBINED) {
-                it.darkThreshold = settings.ambientDarkThreshold
-                it.dimThreshold = settings.ambientDimThreshold
+                it.nightThreshold = settings.ambientNightThreshold
                 it.start()
                 startSensorObserving()
             } else {
@@ -247,7 +246,6 @@ class LightControlEngine(
     private fun getModesForZone(zone: DayTimeZone, profile: LightProfile): Pair<Int, Int> {
         return when (zone) {
             DayTimeZone.DAY -> Pair(profile.dayModeFront, profile.dayModeRear)
-            DayTimeZone.DUSK -> Pair(profile.duskModeFront, profile.duskModeRear)
             DayTimeZone.NIGHT -> Pair(profile.nightModeFront, profile.nightModeRear)
         }
     }

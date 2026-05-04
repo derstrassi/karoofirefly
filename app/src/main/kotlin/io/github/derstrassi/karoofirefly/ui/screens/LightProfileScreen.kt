@@ -35,8 +35,6 @@ fun LightProfileScreen(
 ) {
     var dayFront by remember(profile) { mutableIntStateOf(profile.dayModeFront) }
     var dayRear by remember(profile) { mutableIntStateOf(profile.dayModeRear) }
-    var duskFront by remember(profile) { mutableIntStateOf(profile.duskModeFront) }
-    var duskRear by remember(profile) { mutableIntStateOf(profile.duskModeRear) }
     var nightFront by remember(profile) { mutableIntStateOf(profile.nightModeFront) }
     var nightRear by remember(profile) { mutableIntStateOf(profile.nightModeRear) }
 
@@ -45,8 +43,6 @@ fun LightProfileScreen(
             LightProfile(
                 dayModeFront = dayFront,
                 dayModeRear = dayRear,
-                duskModeFront = duskFront,
-                duskModeRear = duskRear,
                 nightModeFront = nightFront,
                 nightModeRear = nightRear,
             ),
@@ -72,13 +68,6 @@ fun LightProfileScreen(
         Text("Day", style = MaterialTheme.typography.titleMedium)
         ModeSelector("Front", dayFront) { dayFront = it; saveProfile() }
         ModeSelector("Rear", dayRear) { dayRear = it; saveProfile() }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Dusk/Dawn
-        Text("Dusk / Dawn", style = MaterialTheme.typography.titleMedium)
-        ModeSelector("Front", duskFront) { duskFront = it; saveProfile() }
-        ModeSelector("Rear", duskRear) { duskRear = it; saveProfile() }
 
         Spacer(modifier = Modifier.height(16.dp))
 

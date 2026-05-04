@@ -50,32 +50,21 @@ class TimeBasedController {
         )
     }
 
-    /**
-     * Get the current time-of-day zone.
-     */
     fun getCurrentZone(): DayTimeZone {
         val sunrise = lastSunrise ?: return DayTimeZone.DAY
         val sunset = lastSunset ?: return DayTimeZone.DAY
         val now = Calendar.getInstance()
 
-        val dawnStart = (sunrise.clone() as Calendar).apply {
-            add(Calendar.MINUTE, -dawnOffsetMinutes)
-        }
-        val dawnEnd = (sunrise.clone() as Calendar).apply {
+        val dayStart = (sunrise.clone() as Calendar).apply {
             add(Calendar.MINUTE, dawnOffsetMinutes)
         }
-        val duskStart = (sunset.clone() as Calendar).apply {
-            add(Calendar.MINUTE, -duskOffsetMinutes)
-        }
-        val duskEnd = (sunset.clone() as Calendar).apply {
+        val nightStart = (sunset.clone() as Calendar).apply {
             add(Calendar.MINUTE, duskOffsetMinutes)
         }
 
         return when {
-            now.before(dawnStart) -> DayTimeZone.NIGHT
-            now.before(dawnEnd) -> DayTimeZone.DUSK  // dawn = dusk zone
-            now.before(duskStart) -> DayTimeZone.DAY
-            now.before(duskEnd) -> DayTimeZone.DUSK
+            now.before(dayStart) -> DayTimeZone.NIGHT
+            now.before(nightStart) -> DayTimeZone.DAY
             else -> DayTimeZone.NIGHT
         }
     }
