@@ -9,7 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
-import io.github.derstrassi.karoofirefly.ant.LightMode
+import io.github.derstrassi.karoofirefly.data.DayTimeZone
 import io.github.derstrassi.karoofirefly.data.LightControllerSettings
 import io.github.derstrassi.karoofirefly.data.PreferencesRepository
 import io.github.derstrassi.karoofirefly.engine.AmbientLightSensor
@@ -42,7 +42,6 @@ class MainActivity : ComponentActivity() {
             luxSensor.start()
         }
 
-        // Wait for extension to become available
         @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
         val extensionFlow = flow {
             while (true) {
@@ -55,9 +54,8 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        val frontModeFlow = extensionFlow.flatMapLatest { it.engine.currentFrontMode }
+        val activeZoneFlow = extensionFlow.flatMapLatest { it.engine.activeZone }
         val luxFlow = extensionFlow.flatMapLatest {
-            // Stop own sensor once extension is available
             if (ownsLuxSensor) {
                 luxSensor.stop()
                 ownsLuxSensor = false
@@ -71,7 +69,7 @@ class MainActivity : ComponentActivity() {
                 var currentScreen by remember { mutableStateOf(Screen.SETTINGS) }
 
                 val luxValue by luxFlow.collectAsState(initial = luxSensor.currentLux.value)
-                val frontMode by frontModeFlow.collectAsState(initial = LightMode.OFF)
+                val activeZone by activeZoneFlow.collectAsState(initial = null)
                 val lights = KarooLightControllerExtension.getInstance()
                     ?.discoveredLights?.collectAsState(initial = emptyList())?.value ?: emptyList()
 
@@ -80,7 +78,7 @@ class MainActivity : ComponentActivity() {
                         settings = settings,
                         discoveredLights = lights,
                         currentLux = luxValue,
-                        currentLightMode = frontMode,
+                        activeZone = activeZone,
                         sunriseTime = KarooLightControllerExtension.getInstance()?.timeController?.getSunriseTime(),
                         sunsetTime = KarooLightControllerExtension.getInstance()?.timeController?.getSunsetTime(),
                         onSave = { newSettings ->
@@ -101,17 +99,21 @@ class MainActivity : ComponentActivity() {
                         onTestNotification = {
                             KarooLightControllerExtension.getInstance()?.dispatchTestZoneAlert()
                         },
-                        onSetMode = { mode ->
-                            KarooLightControllerExtension.getInstance()?.engine?.setDebugLightMode(mode)
+                        onSetZone = { zone ->
+                            KarooLightControllerExtension.getInstance()?.engine?.setDebugZone(zone)
                         },
                     )
                     Screen.PROFILES -> LightProfileScreen(
-                        profile = settings.profile,
-                        onSave = { newProfile ->
+                        assignments = settings.lightAssignments,
+                        onUpdateAssignment = { updated ->
                             lifecycleScope.launch {
-                                repository.updateProfile(newProfile)
+                                val newAssignments = settings.lightAssignments.map {
+                                    if (it.deviceId == updated.deviceId) updated else it
+                                }
+                                val newSettings = settings.copy(lightAssignments = newAssignments)
+                                repository.updateSettings(newSettings)
                                 KarooLightControllerExtension.getInstance()?.let { ext ->
-                                    ext.engine.settings = ext.engine.settings.copy(profile = newProfile)
+                                    ext.engine.settings = newSettings
                                 }
                             }
                         },

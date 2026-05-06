@@ -7,9 +7,9 @@ import io.hammerhead.karooext.models.PlayBeepPattern
 import io.hammerhead.karooext.models.OnLocationChanged
 import io.hammerhead.karooext.models.RideState
 import io.hammerhead.karooext.models.SavedDevices
-import io.github.derstrassi.karoofirefly.ant.LightMode
 import io.github.derstrassi.karoofirefly.karoo.KarooLightControl
-import io.github.derstrassi.karoofirefly.data.LightRole
+import io.github.derstrassi.karoofirefly.data.DayTimeZone
+import io.github.derstrassi.karoofirefly.data.LightProtocol
 import io.github.derstrassi.karoofirefly.data.PreferencesRepository
 import io.github.derstrassi.karoofirefly.datatypes.LightStatusDataType
 import io.github.derstrassi.karoofirefly.engine.AmbientLightSensor
@@ -25,7 +25,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
-data class DiscoveredLight(val id: String, val name: String, val manufacturer: String? = null)
+data class DiscoveredLight(
+    val id: String,
+    val name: String,
+    val manufacturer: String? = null,
+    val protocol: LightProtocol = LightProtocol.ANT_PLUS,
+)
 
 class KarooLightControllerExtension : KarooExtension("karoo-light-controller", BuildConfig.VERSION_NAME) {
 
@@ -72,25 +77,39 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         ambientLightSensor = AmbientLightSensor(applicationContext)
         engine = LightControlEngine(timeController, ambientLightSensor)
 
-        engine.onSetModes = { frontMode, rearMode ->
+        engine.onApplyZone = { zone ->
             for (assignment in engine.settings.lightAssignments) {
-                val mode = when (assignment.role) {
-                    LightRole.FRONT -> frontMode
-                    LightRole.REAR -> rearMode
+                val modeName = if (zone == null) {
+                    "OFF"
+                } else {
+                    when (zone) {
+                        DayTimeZone.DAY -> assignment.dayMode
+                        DayTimeZone.NIGHT -> assignment.nightMode
+                    }
                 }
-                lightControl.setLightMode(assignment.deviceId, mode)
+                when (assignment.protocol) {
+                    LightProtocol.ANT_PLUS -> lightControl.setLightMode(assignment.deviceId, modeName)
+                    LightProtocol.BLE -> { /* TODO: Phase 3 */ }
+                }
             }
         }
 
-        engine.onZoneChange = { oldZone, newZone, reason, frontMode, rearMode ->
+        engine.onZoneChange = { oldZone, newZone, reason ->
             if (engine.settings.zoneNotificationsEnabled && engine.state.value != LightControlEngine.EngineState.IDLE && engine.settings.lightAssignments.isNotEmpty()) {
                 playNotificationSound()
+                val detail = engine.settings.lightAssignments.joinToString("\n") { assignment ->
+                    val modeName = when (newZone) {
+                        DayTimeZone.DAY -> assignment.dayMode
+                        DayTimeZone.NIGHT -> assignment.nightMode
+                    }
+                    "${assignment.deviceName}: $modeName"
+                }
                 karooSystem.dispatch(
                     InRideAlert(
                         id = "zone-change",
                         icon = R.drawable.ic_firefly,
                         title = "$oldZone → $newZone ($reason)",
-                        detail = "F: ${frontMode.displayName}\nR: ${rearMode.displayName}",
+                        detail = detail,
                         autoDismissMs = 10000,
                         backgroundColor = android.R.color.black,
                         textColor = android.R.color.white,
@@ -135,7 +154,12 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
 
     private fun loadSettings() {
         extensionScope.launch {
-            val settings = repository.settingsFlow.first()
+            var settings = repository.settingsFlow.first()
+            val migrated = settings.migrateProfilesToAssignments()
+            if (migrated != settings) {
+                repository.updateSettings(migrated)
+                settings = migrated
+            }
             engine.settings = settings
             timeController.dawnOffsetMinutes = settings.dawnOffsetMinutes
             timeController.duskOffsetMinutes = settings.duskOffsetMinutes
@@ -163,6 +187,17 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         }
     }
 
+    private fun buildModeDetail(zone: DayTimeZone?): String {
+        if (zone == null) return "Lights Off"
+        return engine.settings.lightAssignments.joinToString("\n") { assignment ->
+            val modeName = when (zone) {
+                DayTimeZone.DAY -> assignment.dayMode
+                DayTimeZone.NIGHT -> assignment.nightMode
+            }
+            "${assignment.deviceName}: $modeName"
+        }
+    }
+
     override fun onBonusAction(actionId: String) {
         Timber.d("$TAG: BonusAction $actionId")
         when (actionId) {
@@ -173,7 +208,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                         id = "light-toggle",
                         icon = R.drawable.ic_firefly,
                         title = "Lights Toggled",
-                        detail = "",
+                        detail = buildModeDetail(engine.activeZone.value),
                         autoDismissMs = 3000,
                         backgroundColor = android.R.color.black,
                         textColor = android.R.color.white,
@@ -182,19 +217,12 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
             }
             "cycle-mode" -> {
                 engine.onCycleMode()
-                val front = engine.currentFrontMode.value
-                val rear = engine.currentRearMode.value
-                val detail = if (front == LightMode.OFF && rear == LightMode.OFF) {
-                    "Lights Off"
-                } else {
-                    "F: ${front.displayName}\nR: ${rear.displayName}"
-                }
                 karooSystem.dispatch(
                     InRideAlert(
                         id = "light-mode",
                         icon = R.drawable.ic_firefly,
                         title = "Light Mode Changed",
-                        detail = detail,
+                        detail = buildModeDetail(engine.activeZone.value),
                         autoDismissMs = 3000,
                         backgroundColor = android.R.color.black,
                         textColor = android.R.color.white,
@@ -227,7 +255,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                     id = "zone-change",
                     icon = R.drawable.ic_firefly,
                     title = "DAY → NIGHT (Light sensor)",
-                    detail = "F: Steady Low\nR: Steady High",
+                    detail = buildModeDetail(DayTimeZone.NIGHT),
                     autoDismissMs = 10000,
                     backgroundColor = android.R.color.black,
                     textColor = android.R.color.white,

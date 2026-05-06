@@ -38,11 +38,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import io.github.derstrassi.karoofirefly.DiscoveredLight
 import io.github.derstrassi.karoofirefly.R
-import io.github.derstrassi.karoofirefly.ant.LightMode
+import io.github.derstrassi.karoofirefly.data.DayTimeZone
 import io.github.derstrassi.karoofirefly.data.LightAssignment
 import io.github.derstrassi.karoofirefly.data.LightControlMode
 import io.github.derstrassi.karoofirefly.data.LightControllerSettings
 import io.github.derstrassi.karoofirefly.data.LightRole
+import io.github.derstrassi.karoofirefly.data.modeProviderFor
 import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,13 +52,13 @@ fun SettingsScreen(
     settings: LightControllerSettings,
     discoveredLights: List<DiscoveredLight> = emptyList(),
     currentLux: Float = 0f,
-    currentLightMode: LightMode = LightMode.OFF,
+    activeZone: DayTimeZone? = null,
     sunriseTime: Calendar? = null,
     sunsetTime: Calendar? = null,
     onSave: (LightControllerSettings) -> Unit,
     onNavigateToProfiles: () -> Unit,
     onDebugToggle: (Boolean) -> Unit = {},
-    onSetMode: (LightMode) -> Unit = {},
+    onSetZone: (DayTimeZone) -> Unit = {},
     onTestNotification: () -> Unit = {},
 ) {
     var dawnOffset by remember(settings) { mutableFloatStateOf(settings.dawnOffsetMinutes.toFloat()) }
@@ -126,11 +127,21 @@ fun SettingsScreen(
                     light = light,
                     currentRole = currentAssignment?.role,
                     onRoleSelected = { role ->
+                        val existing = settings.lightAssignments.find { it.deviceId == light.id }
                         val updatedAssignments = settings.lightAssignments
                             .filter { it.deviceId != light.id }
                             .let { list ->
                                 if (role != null) {
-                                    list + LightAssignment(light.id, light.name, role)
+                                    val defaultModes = modeProviderFor(light.protocol).availableModes()
+                                    val defaultMode = defaultModes.getOrNull(1)?.id ?: "OFF"
+                                    list + (existing?.copy(role = role) ?: LightAssignment(
+                                        deviceId = light.id,
+                                        deviceName = light.name,
+                                        role = role,
+                                        protocol = light.protocol,
+                                        dayMode = defaultMode,
+                                        nightMode = defaultMode,
+                                    ))
                                 } else {
                                     list
                                 }
@@ -306,31 +317,31 @@ fun SettingsScreen(
                 Text("Test Zone Notification")
             }
             Spacer(modifier = Modifier.height(8.dp))
-            var debugModeExpanded by remember { mutableStateOf(false) }
+            var debugZoneExpanded by remember { mutableStateOf(false) }
             ExposedDropdownMenuBox(
-                expanded = debugModeExpanded,
-                onExpandedChange = { debugModeExpanded = it },
+                expanded = debugZoneExpanded,
+                onExpandedChange = { debugZoneExpanded = it },
             ) {
                 TextField(
-                    value = currentLightMode.displayName,
+                    value = activeZone?.name ?: "OFF",
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Light Mode") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = debugModeExpanded) },
+                    label = { Text("Active Zone") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = debugZoneExpanded) },
                     modifier = Modifier
                         .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                         .fillMaxWidth(),
                 )
                 ExposedDropdownMenu(
-                    expanded = debugModeExpanded,
-                    onDismissRequest = { debugModeExpanded = false },
+                    expanded = debugZoneExpanded,
+                    onDismissRequest = { debugZoneExpanded = false },
                 ) {
-                    LightMode.entries.forEach { mode ->
+                    DayTimeZone.entries.forEach { zone ->
                         DropdownMenuItem(
-                            text = { Text(mode.displayName) },
+                            text = { Text(zone.name) },
                             onClick = {
-                                debugModeExpanded = false
-                                onSetMode(mode)
+                                debugZoneExpanded = false
+                                onSetZone(zone)
                             },
                         )
                     }

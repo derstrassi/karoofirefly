@@ -12,43 +12,28 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import io.github.derstrassi.karoofirefly.ant.LightMode
-import io.github.derstrassi.karoofirefly.data.LightProfile
+import io.github.derstrassi.karoofirefly.data.LightAssignment
+import io.github.derstrassi.karoofirefly.data.LightModeOption
+import io.github.derstrassi.karoofirefly.data.modeProviderFor
 
 @Composable
 fun LightProfileScreen(
-    profile: LightProfile,
-    onSave: (LightProfile) -> Unit,
+    assignments: List<LightAssignment>,
+    onUpdateAssignment: (LightAssignment) -> Unit,
     onBack: () -> Unit,
 ) {
-    var dayFront by remember(profile) { mutableIntStateOf(profile.dayModeFront) }
-    var dayRear by remember(profile) { mutableIntStateOf(profile.dayModeRear) }
-    var nightFront by remember(profile) { mutableIntStateOf(profile.nightModeFront) }
-    var nightRear by remember(profile) { mutableIntStateOf(profile.nightModeRear) }
-
-    fun saveProfile() {
-        onSave(
-            LightProfile(
-                dayModeFront = dayFront,
-                dayModeRear = dayRear,
-                nightModeFront = nightFront,
-                nightModeRear = nightRear,
-            ),
-        )
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -64,17 +49,35 @@ fun LightProfileScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Day
-        Text("Day", style = MaterialTheme.typography.titleMedium)
-        ModeSelector("Front", dayFront) { dayFront = it; saveProfile() }
-        ModeSelector("Rear", dayRear) { dayRear = it; saveProfile() }
+        if (assignments.isEmpty()) {
+            Text(
+                "No lights assigned. Assign lights as Front or Rear in Settings.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            assignments.forEachIndexed { index, assignment ->
+                val modes = modeProviderFor(assignment.protocol).availableModes()
 
-        Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "${assignment.deviceName} — ${assignment.role.name}",
+                    style = MaterialTheme.typography.titleMedium,
+                )
 
-        // Night
-        Text("Night", style = MaterialTheme.typography.titleMedium)
-        ModeSelector("Front", nightFront) { nightFront = it; saveProfile() }
-        ModeSelector("Rear", nightRear) { nightRear = it; saveProfile() }
+                ModeSelector("Day", assignment.dayMode, modes) { newMode ->
+                    onUpdateAssignment(assignment.copy(dayMode = newMode))
+                }
+                ModeSelector("Night", assignment.nightMode, modes) { newMode ->
+                    onUpdateAssignment(assignment.copy(nightMode = newMode))
+                }
+
+                if (index < assignments.lastIndex) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -88,12 +91,12 @@ fun LightProfileScreen(
 @Composable
 private fun ModeSelector(
     label: String,
-    selectedMode: Int,
-    onModeSelected: (Int) -> Unit,
+    selectedMode: String,
+    modes: List<LightModeOption>,
+    onModeSelected: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val modes = LightMode.CYCLING_MODES
-    val selectedLabel = LightMode.fromModeNumber(selectedMode)?.displayName ?: "Mode $selectedMode"
+    val selectedLabel = modes.find { it.id == selectedMode }?.displayName ?: selectedMode
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -115,7 +118,7 @@ private fun ModeSelector(
                 DropdownMenuItem(
                     text = { Text(mode.displayName) },
                     onClick = {
-                        onModeSelected(mode.modeNumber)
+                        onModeSelected(mode.id)
                         expanded = false
                     },
                 )
