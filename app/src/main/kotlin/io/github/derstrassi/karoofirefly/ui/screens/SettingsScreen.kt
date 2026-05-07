@@ -59,7 +59,6 @@ fun SettingsScreen(
     onNavigateToProfiles: () -> Unit,
     onDebugToggle: (Boolean) -> Unit = {},
     onSetZone: (DayTimeZone) -> Unit = {},
-    onTestNotification: () -> Unit = {},
 ) {
     var dawnOffset by remember(settings) { mutableFloatStateOf(settings.dawnOffsetMinutes.toFloat()) }
     var duskOffset by remember(settings) { mutableFloatStateOf(settings.duskOffsetMinutes.toFloat()) }
@@ -312,10 +311,6 @@ fun SettingsScreen(
         }
 
         if (debugEnabled) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(onClick = onTestNotification, modifier = Modifier.fillMaxWidth()) {
-                Text("Test Zone Notification")
-            }
             Spacer(modifier = Modifier.height(8.dp))
             var debugZoneExpanded by remember { mutableStateOf(false) }
             ExposedDropdownMenuBox(

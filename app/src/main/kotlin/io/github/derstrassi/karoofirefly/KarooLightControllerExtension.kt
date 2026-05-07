@@ -246,24 +246,6 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         )
     }
 
-    fun dispatchTestZoneAlert() {
-        extensionScope.launch {
-            kotlinx.coroutines.delay(5000)
-            playNotificationSound()
-            karooSystem.dispatch(
-                InRideAlert(
-                    id = "zone-change",
-                    icon = R.drawable.ic_firefly,
-                    title = "DAY → NIGHT (Light sensor)",
-                    detail = buildModeDetail(DayTimeZone.NIGHT),
-                    autoDismissMs = 10000,
-                    backgroundColor = android.R.color.black,
-                    textColor = android.R.color.white,
-                ),
-            )
-        }
-    }
-
     override fun onDestroy() {
         Timber.d("$TAG: Extension onDestroy")
         instance = null
