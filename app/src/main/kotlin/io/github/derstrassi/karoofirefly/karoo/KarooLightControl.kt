@@ -8,19 +8,10 @@ import android.os.Bundle
 import android.os.IBinder
 import android.os.Parcel
 import android.os.Parcelable
+import io.github.derstrassi.karoofirefly.light.LightController
 import timber.log.Timber
 
-/**
- * Controls ANT+ bike lights through Karoo's internal SensorService AIDL.
- *
- * SensorServiceAIDL (descriptor: io.hammerhead.sensorservice.SensorServiceAIDL):
- *   Transaction 17: getLightCommandConnection() → returns IBinder
- *
- * LightCommandConnectionAIDL (descriptor: io.hammerhead.sensorservice.LightCommandConnectionAIDL):
- *   Transaction 3: setLightMode(id: String, device: Device?, bundle: Bundle)
- *     - Bundle contains LightMode parcelable (writeToParcel writes enum name as string)
- */
-class KarooLightControl(private val context: Context) {
+class KarooLightControl(private val context: Context) : LightController {
 
     companion object {
         private const val TAG = "KarooLightControl"
@@ -212,6 +203,10 @@ class KarooLightControl(private val context: Context) {
             data.recycle()
             reply.recycle()
         }
+    }
+
+    override fun setMode(deviceId: String, modeName: String) {
+        setLightMode(deviceId, modeName)
     }
 
     fun isConnected(): Boolean = lightCmdBinder != null

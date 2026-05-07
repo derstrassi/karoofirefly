@@ -11,6 +11,7 @@ import io.github.derstrassi.karoofirefly.karoo.KarooLightControl
 import io.github.derstrassi.karoofirefly.data.DayTimeZone
 import io.github.derstrassi.karoofirefly.data.LightProtocol
 import io.github.derstrassi.karoofirefly.data.PreferencesRepository
+import io.github.derstrassi.karoofirefly.light.LightController
 import io.github.derstrassi.karoofirefly.datatypes.LightStatusDataType
 import io.github.derstrassi.karoofirefly.engine.AmbientLightSensor
 import io.github.derstrassi.karoofirefly.engine.LightControlEngine
@@ -50,6 +51,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
 
     internal lateinit var karooSystem: KarooSystemService
     internal lateinit var lightControl: KarooLightControl
+    private val lightControllers = mutableMapOf<LightProtocol, LightController>()
     internal lateinit var timeController: TimeBasedController
     internal lateinit var ambientLightSensor: AmbientLightSensor
     internal lateinit var engine: LightControlEngine
@@ -73,6 +75,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         karooSystem = KarooSystemService(applicationContext)
         repository = PreferencesRepository(applicationContext)
         lightControl = KarooLightControl(applicationContext)
+        lightControllers[LightProtocol.ANT_PLUS] = lightControl
         timeController = TimeBasedController()
         ambientLightSensor = AmbientLightSensor(applicationContext)
         engine = LightControlEngine(timeController, ambientLightSensor)
@@ -87,10 +90,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                         DayTimeZone.NIGHT -> assignment.nightMode
                     }
                 }
-                when (assignment.protocol) {
-                    LightProtocol.ANT_PLUS -> lightControl.setLightMode(assignment.deviceId, modeName)
-                    LightProtocol.BLE -> { /* TODO: Phase 3 */ }
-                }
+                lightControllers[assignment.protocol]?.setMode(assignment.deviceId, modeName)
             }
         }
 
