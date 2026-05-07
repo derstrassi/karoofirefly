@@ -5,8 +5,11 @@ import io.hammerhead.karooext.extension.KarooExtension
 import io.hammerhead.karooext.models.InRideAlert
 import io.hammerhead.karooext.models.PlayBeepPattern
 import io.hammerhead.karooext.models.OnLocationChanged
+import io.hammerhead.karooext.models.ReleaseBluetooth
+import io.hammerhead.karooext.models.RequestBluetooth
 import io.hammerhead.karooext.models.RideState
 import io.hammerhead.karooext.models.SavedDevices
+import io.github.derstrassi.karoofirefly.ble.MagicshineBleController
 import io.github.derstrassi.karoofirefly.karoo.KarooLightControl
 import io.github.derstrassi.karoofirefly.data.DayTimeZone
 import io.github.derstrassi.karoofirefly.data.LightProtocol
@@ -22,6 +25,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -51,16 +55,19 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
 
     internal lateinit var karooSystem: KarooSystemService
     internal lateinit var lightControl: KarooLightControl
+    internal lateinit var magicshineController: MagicshineBleController
     private val lightControllers = mutableMapOf<LightProtocol, LightController>()
     internal lateinit var timeController: TimeBasedController
     internal lateinit var ambientLightSensor: AmbientLightSensor
     internal lateinit var engine: LightControlEngine
     internal lateinit var repository: PreferencesRepository
 
+    private val _antLights = MutableStateFlow<List<DiscoveredLight>>(emptyList())
     private val _discoveredLights = MutableStateFlow<List<DiscoveredLight>>(emptyList())
     val discoveredLights: StateFlow<List<DiscoveredLight>> = _discoveredLights
 
     private var savedDevicesConsumerId: String? = null
+    @Volatile private var settingsUiActive = false
 
     private val extensionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -75,7 +82,13 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         karooSystem = KarooSystemService(applicationContext)
         repository = PreferencesRepository(applicationContext)
         lightControl = KarooLightControl(applicationContext)
+        magicshineController = MagicshineBleController(applicationContext)
         lightControllers[LightProtocol.ANT_PLUS] = lightControl
+        lightControllers[LightProtocol.BLE] = magicshineController
+        magicshineController.onDeviceConnected = {
+            stopBleIfNotNeeded()
+            engine.activeZone.value?.let { zone -> engine.onApplyZone?.invoke(zone) }
+        }
         timeController = TimeBasedController()
         ambientLightSensor = AmbientLightSensor(applicationContext)
         engine = LightControlEngine(timeController, ambientLightSensor)
@@ -97,24 +110,26 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         engine.onZoneChange = { oldZone, newZone, reason ->
             if (engine.settings.zoneNotificationsEnabled && engine.state.value != LightControlEngine.EngineState.IDLE && engine.settings.lightAssignments.isNotEmpty()) {
                 playNotificationSound()
-                val detail = engine.settings.lightAssignments.joinToString("\n") { assignment ->
-                    val modeName = when (newZone) {
-                        DayTimeZone.DAY -> assignment.dayMode
-                        DayTimeZone.NIGHT -> assignment.nightMode
-                    }
-                    "${assignment.deviceName}: $modeName"
-                }
                 karooSystem.dispatch(
                     InRideAlert(
                         id = "zone-change",
                         icon = R.drawable.ic_firefly,
                         title = "$oldZone → $newZone ($reason)",
-                        detail = detail,
+                        detail = buildModeDetail(newZone),
                         autoDismissMs = 10000,
                         backgroundColor = android.R.color.black,
                         textColor = android.R.color.white,
                     ),
                 )
+            }
+        }
+
+        // Merge ANT+ and BLE discovered lights
+        extensionScope.launch {
+            combine(_antLights, magicshineController.discoveredLights) { ant, ble ->
+                ant + ble
+            }.collect { merged ->
+                _discoveredLights.value = merged
             }
         }
 
@@ -125,6 +140,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                 setupConsumers()
                 loadSettings()
                 discoverKarooLights()
+                startBleIfNeeded()
             }
         }
     }
@@ -167,6 +183,39 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         }
     }
 
+    fun setSettingsUiActive(active: Boolean) {
+        settingsUiActive = active
+        if (active) startBleIfNeeded() else stopBleIfNotNeeded()
+    }
+
+    private fun hasBleAssignments(): Boolean =
+        engine.settings.lightAssignments.any { it.protocol == LightProtocol.BLE }
+
+    private fun startBleIfNeeded() {
+        if (settingsUiActive || hasBleAssignments()) {
+            extensionScope.launch {
+                kotlinx.coroutines.delay(2000)
+                karooSystem.dispatch(RequestBluetooth(extension))
+                magicshineController.startDiscovery()
+            }
+        }
+    }
+
+    private fun stopBleIfNotNeeded() {
+        if (!settingsUiActive && !hasBleAssignments()) {
+            magicshineController.stopDiscovery()
+            karooSystem.dispatch(ReleaseBluetooth(extension))
+        } else if (!settingsUiActive && hasBleAssignments()) {
+            val assignedBleIds = engine.settings.lightAssignments
+                .filter { it.protocol == LightProtocol.BLE }
+                .map { it.deviceId }
+                .toSet()
+            if (magicshineController.allConnected(assignedBleIds)) {
+                magicshineController.stopDiscovery()
+            }
+        }
+    }
+
     internal fun discoverKarooLights() {
         savedDevicesConsumerId?.let { karooSystem.removeConsumer(it) }
         extensionScope.launch {
@@ -180,9 +229,9 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                 }
 
                 val discovered = lights.map { DiscoveredLight(it.id, it.name, it.details?.manufacturer) }
-                _discoveredLights.value = discovered
+                _antLights.value = discovered
 
-                Timber.d("$TAG: Found ${discovered.size} bike light(s): ${discovered.joinToString { "${it.name} (${it.id})" }}")
+                Timber.d("$TAG: Found ${discovered.size} ANT+ bike light(s): ${discovered.joinToString { "${it.name} (${it.id})" }}")
             }
         }
     }
@@ -250,7 +299,9 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         Timber.d("$TAG: Extension onDestroy")
         instance = null
         engine.destroy()
+        magicshineController.destroy()
         lightControl.unbind()
+        karooSystem.dispatch(ReleaseBluetooth(extension))
         karooSystem.disconnect()
         extensionScope.cancel()
         super.onDestroy()

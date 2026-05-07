@@ -1,5 +1,5 @@
 [versions]
-agp = "8.2.2"
+agp = "8.7.3"
 kotlin = "2.0.0"
 karooExt = "1.1.8"
 androidxCore = "1.13.1"
@@ -12,6 +12,7 @@ glance = "1.1.1"
 sunriseSunset = "1.1.1"
 timber = "5.0.1"
 kotlinxSerialization = "1.7.3"
+nordicBle = "2.0.0-alpha02"
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -35,6 +36,7 @@ androidx-glance-preview = { group = "androidx.glance", name = "glance-preview", 
 sunrise-sunset = { module = "ca.rmen:lib-sunrise-sunset", version.ref = "sunriseSunset" }
 timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+nordic-ble-client = { module = "no.nordicsemi.kotlin.ble:client-android", version.ref = "nordicBle" }
 
 [bundles]
 androidx-lifecycle = ["androidx-lifecycle-runtime-compose", "androidx-lifecycle-viewmodel-compose"]

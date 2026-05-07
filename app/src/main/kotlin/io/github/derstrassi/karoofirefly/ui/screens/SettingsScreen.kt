@@ -131,7 +131,7 @@ fun SettingsScreen(
                             .filter { it.deviceId != light.id }
                             .let { list ->
                                 if (role != null) {
-                                    val defaultModes = modeProviderFor(light.protocol).availableModes()
+                                    val defaultModes = modeProviderFor(light.protocol, light.id).availableModes()
                                     val defaultMode = defaultModes.getOrNull(1)?.id ?: "OFF"
                                     list + (existing?.copy(role = role) ?: LightAssignment(
                                         deviceId = light.id,

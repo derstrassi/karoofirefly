@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "io.github.derstrassi.karoofirefly"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "io.github.derstrassi.karoofirefly"
@@ -65,6 +65,7 @@ dependencies {
     implementation(libs.sunrise.sunset)
     implementation(libs.timber)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.nordic.ble.client)
 
     // ANT Android SDK - place ant-lib.aar in app/libs/
     // Download from: https://github.com/ant-wireless/ANT-Android-SDKs

@@ -46,9 +46,19 @@ object AntPlusModeProvider : LightModeProvider {
         LightMode.CYCLING_MODES.map { LightModeOption(it.karooName, it.displayName) }
 }
 
-fun modeProviderFor(protocol: LightProtocol): LightModeProvider = when (protocol) {
+fun modeProviderFor(protocol: LightProtocol, deviceId: String? = null): LightModeProvider = when (protocol) {
     LightProtocol.ANT_PLUS -> AntPlusModeProvider
-    LightProtocol.BLE -> AntPlusModeProvider // placeholder until Magicshine is implemented
+    LightProtocol.BLE -> {
+        val config = deviceId?.let {
+            io.github.derstrassi.karoofirefly.KarooLightControllerExtension.getInstance()
+                ?.magicshineController?.getDeviceConfig(it)
+        }
+        if (config != null) {
+            io.github.derstrassi.karoofirefly.ble.MagicshineDeviceModeProvider(config)
+        } else {
+            AntPlusModeProvider
+        }
+    }
 }
 
 enum class LightControlMode {

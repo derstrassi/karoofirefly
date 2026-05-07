@@ -57,7 +57,7 @@ fun LightProfileScreen(
             )
         } else {
             assignments.forEachIndexed { index, assignment ->
-                val modes = modeProviderFor(assignment.protocol).availableModes()
+                val modes = modeProviderFor(assignment.protocol, assignment.deviceId).availableModes()
 
                 Text(
                     "${assignment.deviceName} — ${assignment.role.name}",

@@ -1,8 +1,13 @@
 package io.github.derstrassi.karoofirefly
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,8 +34,27 @@ class MainActivity : ComponentActivity() {
 
     private enum class Screen { SETTINGS, PROFILES }
 
+    private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+        if (results.values.all { it }) {
+            KarooLightControllerExtension.getInstance()?.setSettingsUiActive(true)
+        }
+    }
+
+    private fun ensureBlePermissions() {
+        val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+        } else {
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+        if (perms.any { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }) {
+            permissionLauncher.launch(perms)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ensureBlePermissions()
+        KarooLightControllerExtension.getInstance()?.setSettingsUiActive(true)
 
         repository = PreferencesRepository(applicationContext)
         val ext = KarooLightControllerExtension.getInstance()
@@ -122,6 +146,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        KarooLightControllerExtension.getInstance()?.setSettingsUiActive(false)
         if (ownsLuxSensor) {
             luxSensor.stop()
         }

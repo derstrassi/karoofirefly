@@ -14,3 +14,4 @@ Thumbs.db
 
 # ANT SDK JARs
 app/libs/*.jar
+io/
