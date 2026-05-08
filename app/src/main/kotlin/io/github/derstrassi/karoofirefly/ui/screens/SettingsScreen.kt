@@ -67,7 +67,7 @@ fun SettingsScreen(
     sunsetTime: Calendar? = null,
     onSave: (LightControllerSettings) -> Unit,
     onUpdateAssignment: (String, LightAssignment?) -> Unit = { _, _ -> },
-    onDisconnectBle: (String) -> Unit = {},
+    onDeleteLight: (DiscoveredLight) -> Unit = {},
     onTestMode: (String, String) -> Unit = { _, _ -> },
 ) {
     var dawnOffset by remember(settings) { mutableFloatStateOf(settings.dawnOffsetMinutes.toFloat()) }
@@ -130,9 +130,16 @@ fun SettingsScreen(
         val discoveredIds = discoveredLights.map { it.id }.toSet()
         val savedButNotFound = settings.lightAssignments.filter { it.deviceId !in discoveredIds }
 
-        val allLights = discoveredLights + savedButNotFound.map {
+        val allLights = (discoveredLights + savedButNotFound.map {
             DiscoveredLight(it.deviceId, it.deviceName, null, it.protocol, connected = false)
-        }
+        }).sortedWith(compareBy<DiscoveredLight> {
+            val isConfigured = settings.lightAssignments.any { a -> a.deviceId == it.id }
+            when {
+                !isConfigured -> 0
+                it.connected -> 1
+                else -> 2
+            }
+        })
 
         if (allLights.isEmpty()) {
             Text(
@@ -163,9 +170,7 @@ fun SettingsScreen(
                     onUpdateAssignment(light.id, updated)
                 },
                 onTestMode = { deviceId, modeName -> onTestMode(deviceId, modeName) },
-                onDisconnect = if (light.protocol == LightProtocol.BLE) {
-                    { onDisconnectBle(light.id) }
-                } else null,
+                onDelete = { onDeleteLight(light) },
                 onDismiss = { selectedLight = null },
             )
         }
@@ -365,15 +370,15 @@ private fun LightRow(
     onClick: () -> Unit,
 ) {
     val isConfigured = role != null
-    val alpha = if (light.connected) 1f else 0.4f
+    val alpha = if (light.connected || !isConfigured) 1f else 0.4f
     val roleLabel = when (role) {
         LightRole.FRONT -> "Front"
         LightRole.REAR -> "Rear"
         null -> "Tap to configure"
     }
     val statusColor = when {
-        !light.connected -> MaterialTheme.colorScheme.onSurfaceVariant
         !isConfigured -> MaterialTheme.colorScheme.tertiary
+        !light.connected -> MaterialTheme.colorScheme.onSurfaceVariant
         else -> MaterialTheme.colorScheme.primary
     }
     val backgroundColor = when {

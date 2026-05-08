@@ -117,14 +117,17 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     },
-                    onDisconnectBle = { deviceId ->
-                        KarooLightControllerExtension.getInstance()?.magicshineController?.disconnect(deviceId)
+                    onDeleteLight = { light ->
+                        if (light.protocol == io.github.derstrassi.karoofirefly.data.LightProtocol.BLE) {
+                            KarooLightControllerExtension.getInstance()?.magicshineController?.disconnect(light.id)
+                        }
                         lifecycleScope.launch {
-                            val newAssignments = settings.lightAssignments.filter { it.deviceId != deviceId }
+                            val newAssignments = settings.lightAssignments.filter { it.deviceId != light.id }
                             val newSettings = settings.copy(lightAssignments = newAssignments)
                             repository.updateSettings(newSettings)
                             KarooLightControllerExtension.getInstance()?.let { ext ->
                                 ext.engine.settings = newSettings
+                                ext.onAssignmentChanged()
                             }
                         }
                     },

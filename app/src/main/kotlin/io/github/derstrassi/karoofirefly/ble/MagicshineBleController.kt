@@ -283,8 +283,6 @@ class MagicshineBleController(context: Context) : LightController {
         connectionJobs[address]?.cancel()
         connectionJobs.remove(address)
         characteristics.remove(address)
-        devices.remove(address)
-        deviceConfigs.remove(address)
         batteryLevels.remove(address)
         temperatures.remove(address)
         updateDiscoveredLights()

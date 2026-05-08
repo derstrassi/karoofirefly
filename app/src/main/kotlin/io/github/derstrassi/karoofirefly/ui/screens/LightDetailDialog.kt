@@ -49,7 +49,7 @@ fun LightDetailDialog(
     assignment: LightAssignment?,
     onUpdateAssignment: (LightAssignment?) -> Unit,
     onTestMode: ((String, String) -> Unit)? = null,
-    onDisconnect: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
     val modes = modeProviderFor(light.protocol, light.id).availableModes()
@@ -80,24 +80,24 @@ fun LightDetailDialog(
     }
     val connectionLabel = if (light.connected) "Connected" else "Not found"
 
-    var showDisconnectConfirm by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    if (showDisconnectConfirm) {
+    if (showDeleteConfirm) {
         AlertDialog(
-            onDismissRequest = { showDisconnectConfirm = false },
-            title = { Text("Disconnect") },
-            text = { Text("Disconnect ${light.name}?") },
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Light") },
+            text = { Text("Remove ${light.name}? Role and mode settings will be deleted.") },
             confirmButton = {
                 TextButton(onClick = {
-                    showDisconnectConfirm = false
-                    onDisconnect?.invoke()
+                    showDeleteConfirm = false
+                    onDelete?.invoke()
                     onDismiss()
                 }) {
-                    Text("Disconnect", color = MaterialTheme.colorScheme.error)
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDisconnectConfirm = false }) {
+                TextButton(onClick = { showDeleteConfirm = false }) {
                     Text("Cancel")
                 }
             },
@@ -109,10 +109,10 @@ fun LightDetailDialog(
         confirmButton = {
             TextButton(onClick = onDismiss) { Text("Close") }
         },
-        dismissButton = if (onDisconnect != null && light.connected) {
+        dismissButton = if (onDelete != null && assignment != null) {
             {
-                TextButton(onClick = { showDisconnectConfirm = true }) {
-                    Text("Disconnect", color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { showDeleteConfirm = true }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             }
         } else null,

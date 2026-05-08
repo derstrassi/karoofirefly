@@ -226,10 +226,12 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         engine.settings.lightAssignments.any { it.protocol == LightProtocol.BLE }
 
     private fun startBleIfNeeded() {
+        Timber.d("$TAG: startBleIfNeeded: settingsUiActive=$settingsUiActive, hasBleAssignments=${hasBleAssignments()}")
         if (settingsUiActive || hasBleAssignments()) {
             bleStartJob?.cancel()
             bleStartJob = extensionScope.launch {
                 kotlinx.coroutines.delay(2000)
+                Timber.d("$TAG: Requesting Bluetooth and starting BLE discovery")
                 karooSystem.dispatch(RequestBluetooth(extension))
                 magicshineController.startDiscovery()
             }
