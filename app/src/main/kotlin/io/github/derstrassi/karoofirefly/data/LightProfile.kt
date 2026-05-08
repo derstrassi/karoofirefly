@@ -90,6 +90,7 @@ data class LightControllerSettings(
     val duskOffsetMinutes: Int = 0,
     val autoOnWithRide: Boolean = true,
     val autoOffWithRide: Boolean = true,
+    val autoOffOnPause: Boolean = false,
     val profile: LightProfile = LightProfile(),
     val lightControlMode: String = "MANUAL_ONLY",
     val ambientNightThreshold: Int = 50,

@@ -74,6 +74,7 @@ fun SettingsScreen(
     var duskOffset by remember(settings) { mutableFloatStateOf(settings.duskOffsetMinutes.toFloat()) }
     var autoOn by remember(settings) { mutableStateOf(settings.autoOnWithRide) }
     var autoOff by remember(settings) { mutableStateOf(settings.autoOffWithRide) }
+    var autoOffPause by remember(settings) { mutableStateOf(settings.autoOffOnPause) }
     var useTimeBased by remember(settings) { mutableStateOf(settings.useTimeBased) }
     var useAmbientLight by remember(settings) { mutableStateOf(settings.useAmbientLight) }
     var nightThreshold by remember(settings) { mutableIntStateOf(settings.ambientNightThreshold) }
@@ -86,6 +87,7 @@ fun SettingsScreen(
                 duskOffsetMinutes = duskOffset.toInt(),
                 autoOnWithRide = autoOn,
                 autoOffWithRide = autoOff,
+                autoOffOnPause = autoOffPause,
                 lightControlMode = LightControlMode.fromFlags(useTimeBased, useAmbientLight).name,
                 ambientNightThreshold = nightThreshold,
                 zoneNotificationsEnabled = zoneNotifications,
@@ -290,6 +292,17 @@ fun SettingsScreen(
             ) {
                 Text("Auto-off with ride", modifier = Modifier.weight(1f))
                 Switch(checked = autoOff, onCheckedChange = { autoOff = it; saveSettings() })
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Auto-off on pause", modifier = Modifier.weight(1f))
+                Switch(checked = autoOffPause, onCheckedChange = { autoOffPause = it; saveSettings() })
             }
 
             Spacer(modifier = Modifier.height(8.dp))

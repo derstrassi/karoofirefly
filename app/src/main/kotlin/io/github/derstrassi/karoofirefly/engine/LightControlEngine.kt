@@ -64,6 +64,9 @@ class LightControlEngine(
     fun onRidePause() {
         Timber.d("LightControlEngine: ride paused")
         _state.value = EngineState.PAUSED
+        if (settings.autoOffOnPause) {
+            applyZone(null)
+        }
     }
 
     fun onRideStop() {
