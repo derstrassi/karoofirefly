@@ -6,6 +6,6 @@
   "latestVersion": "0.4.1",
   "latestVersionCode": 6,
   "developer": "Dennis Straßer",
-  "description": "Automatic ANT+ smart bike light control based on time of day and ambient light. Tested with Magene L508 and Garmin Varia RTL 515/516. Controls lights already paired through Karoo's native sensor settings — no separate pairing needed. Features manual front/rear light assignment, time-based (sunrise/sunset) and ambient light sensor modes, configurable light profiles per zone (day/night), zone change notifications with sound, and manual override via BonusActions.",
-  "releaseNotes": "* Cycle Mode now cycles through Day/Night profiles instead of individual modes\n* Toggle and Cycle skip zones with OFF profiles\n* BonusAction alerts show for 3s instead of 10s"
+  "description": "Automatic smart bike light control based on time of day and ambient light. Supports ANT+ lights (via Karoo pairing) and Magicshine BLE lights (via Bluetooth). Per-light configuration with protocol-specific modes, time-based and ambient light sensor automation, zone change notifications, and manual override via BonusActions.",
+  "releaseNotes": "* Magicshine BLE light support (Hori 1300, EVO 1700)\n* Per-light profiles with protocol-specific modes\n* Tap-to-configure light detail dialog with test buttons\n* Battery and temperature readout for BLE lights\n* Auto-off on pause option\n* Protocol badges (ANT+/BLE) and connection status indicators"
 }
