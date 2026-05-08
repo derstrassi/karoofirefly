@@ -59,6 +59,11 @@ Tap any light in the Connected Lights section to open its detail dialog. Assign 
 
 Discovered lights are shown with protocol badges (ANT+/BLE), manufacturer, and connection status. New unconfigured lights are highlighted. Tap any light to configure.
 
+<p align="center">
+  <img src="docs/settings_lights.png" width="240" alt="Connected Lights">
+  <img src="docs/settings_dialog.png" width="240" alt="Light Detail Dialog">
+</p>
+
 ### Light Detail Dialog
 
 Each light has its own configuration dialog with:
@@ -82,6 +87,11 @@ Enable one or both features independently via switches:
 | **Ambient Light Sensor** | Automatic mode switching based on Karoo 3's built-in lux sensor |
 
 When both are enabled, time-based acts as the baseline and the ambient sensor can only darken the zone (e.g. tunnel detection). When neither is enabled, lights only respond to BonusButton presses.
+
+<p align="center">
+  <img src="docs/settings_timebased.png" width="240" alt="Time-based mode">
+  <img src="docs/settings_ambient.png" width="240" alt="Ambient light mode">
+</p>
 
 ### Zone Change Notifications
 
