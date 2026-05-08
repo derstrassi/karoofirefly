@@ -148,14 +148,14 @@ fun LightDetailDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Role selector
-                ModeDropdown(
+                OptionDropdown(
                     label = "Role",
-                    value = role?.name ?: "None",
-                    options = listOf("Front", "Rear", "None"),
+                    selectedId = role?.name ?: "None",
+                    options = listOf("FRONT" to "Front", "REAR" to "Rear", "None" to "None"),
                     onSelected = { selected ->
                         role = when (selected) {
-                            "Front" -> LightRole.FRONT
-                            "Rear" -> LightRole.REAR
+                            "FRONT" -> LightRole.FRONT
+                            "REAR" -> LightRole.REAR
                             else -> null
                         }
                         if (role != null && dayMode == "OFF" && nightMode == "OFF") {
@@ -194,47 +194,6 @@ fun LightDetailDialog(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ModeDropdown(
-    label: String,
-    value: String,
-    options: List<String>,
-    onSelected: (String) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = it },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            TextField(
-                value = "$label: $value",
-                onValueChange = {},
-                readOnly = true,
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
-            )
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-            ) {
-                options.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option) },
-                        onClick = { onSelected(option); expanded = false },
-                    )
-                }
-            }
-        }
-    }
-}
-
 @Composable
 private fun LightModeWithTest(
     label: String,
@@ -244,10 +203,10 @@ private fun LightModeWithTest(
     onTest: (() -> Unit)?,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        LightModeDropdown(
+        OptionDropdown(
             label = label,
-            selectedMode = selectedMode,
-            modes = modes,
+            selectedId = selectedMode,
+            options = modes.map { it.id to it.displayName },
             onSelected = onSelected,
             modifier = Modifier.weight(1f),
         )
@@ -266,15 +225,15 @@ private fun LightModeWithTest(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LightModeDropdown(
+private fun OptionDropdown(
     label: String,
-    selectedMode: String,
-    modes: List<LightModeOption>,
+    selectedId: String,
+    options: List<Pair<String, String>>,
     onSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val displayName = modes.find { it.id == selectedMode }?.displayName ?: selectedMode
+    val displayName = options.find { it.first == selectedId }?.second ?: selectedId
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -292,10 +251,10 @@ private fun LightModeDropdown(
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
-            modes.forEach { mode ->
+            options.forEach { (id, name) ->
                 DropdownMenuItem(
-                    text = { Text(mode.displayName) },
-                    onClick = { onSelected(mode.id); expanded = false },
+                    text = { Text(name) },
+                    onClick = { onSelected(id); expanded = false },
                 )
             }
         }

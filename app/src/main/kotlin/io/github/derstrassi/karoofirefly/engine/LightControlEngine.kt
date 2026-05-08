@@ -96,13 +96,7 @@ class LightControlEngine(
     }
 
     private fun hasModesForZone(zone: DayTimeZone): Boolean {
-        return settings.lightAssignments.any { assignment ->
-            val mode = when (zone) {
-                DayTimeZone.DAY -> assignment.dayMode
-                DayTimeZone.NIGHT -> assignment.nightMode
-            }
-            mode != "OFF"
-        }
+        return settings.lightAssignments.any { it.modeForZone(zone) != "OFF" }
     }
 
     fun onCycleMode() {

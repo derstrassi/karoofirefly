@@ -71,6 +71,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
     val discoveredLights: StateFlow<List<DiscoveredLight>> = _discoveredLights
 
     private var savedDevicesConsumerId: String? = null
+    private var bleStartJob: kotlinx.coroutines.Job? = null
     @Volatile private var settingsUiActive = false
 
     private val extensionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -99,14 +100,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
 
         engine.onApplyZone = { zone ->
             for (assignment in engine.settings.lightAssignments) {
-                val modeName = if (zone == null) {
-                    "OFF"
-                } else {
-                    when (zone) {
-                        DayTimeZone.DAY -> assignment.dayMode
-                        DayTimeZone.NIGHT -> assignment.nightMode
-                    }
-                }
+                val modeName = if (zone == null) "OFF" else assignment.modeForZone(zone)
                 if (assignment.protocol == LightProtocol.ANT_PLUS) {
                     val success = lightControl.setLightMode(assignment.deviceId, modeName)
                     val prev = antConnectionStatus[assignment.deviceId]
@@ -233,7 +227,8 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
 
     private fun startBleIfNeeded() {
         if (settingsUiActive || hasBleAssignments()) {
-            extensionScope.launch {
+            bleStartJob?.cancel()
+            bleStartJob = extensionScope.launch {
                 kotlinx.coroutines.delay(2000)
                 karooSystem.dispatch(RequestBluetooth(extension))
                 magicshineController.startDiscovery()
@@ -242,17 +237,12 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
     }
 
     private fun stopBleIfNotNeeded() {
-        if (!settingsUiActive && !hasBleAssignments()) {
+        if (settingsUiActive) return
+        if (!hasBleAssignments()) {
             magicshineController.stopDiscovery()
             karooSystem.dispatch(ReleaseBluetooth(extension))
-        } else if (!settingsUiActive && hasBleAssignments()) {
-            val assignedBleIds = engine.settings.lightAssignments
-                .filter { it.protocol == LightProtocol.BLE }
-                .map { it.deviceId }
-                .toSet()
-            if (magicshineController.allConnected(assignedBleIds)) {
-                magicshineController.stopDiscovery()
-            }
+        } else if (magicshineController.allConnected(magicshineController.assignedDeviceIds)) {
+            magicshineController.stopDiscovery()
         }
     }
 
@@ -304,12 +294,8 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
 
     private fun buildModeDetail(zone: DayTimeZone?): String {
         if (zone == null) return "Lights Off"
-        return engine.settings.lightAssignments.joinToString("\n") { assignment ->
-            val modeName = when (zone) {
-                DayTimeZone.DAY -> assignment.dayMode
-                DayTimeZone.NIGHT -> assignment.nightMode
-            }
-            "${assignment.deviceName}: $modeName"
+        return engine.settings.lightAssignments.joinToString("\n") {
+            "${it.deviceName}: ${it.modeForZone(zone)}"
         }
     }
 

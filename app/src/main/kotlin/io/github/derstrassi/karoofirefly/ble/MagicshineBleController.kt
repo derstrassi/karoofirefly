@@ -46,11 +46,11 @@ class MagicshineBleController(context: Context) : LightController {
 
     private data class BleDevice(val peripheral: Peripheral, val name: String)
 
-    private val devices = mutableMapOf<String, BleDevice>()
-    private val characteristics = mutableMapOf<String, RemoteCharacteristic>()
-    private val deviceConfigs = mutableMapOf<String, MagicshineDeviceConfig>()
-    private val batteryLevels = mutableMapOf<String, Int>()
-    private val temperatures = mutableMapOf<String, Int>()
+    private val devices = java.util.concurrent.ConcurrentHashMap<String, BleDevice>()
+    private val characteristics = java.util.concurrent.ConcurrentHashMap<String, RemoteCharacteristic>()
+    private val deviceConfigs = java.util.concurrent.ConcurrentHashMap<String, MagicshineDeviceConfig>()
+    private val batteryLevels = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private val temperatures = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
     private val _discoveredLights = MutableStateFlow<List<DiscoveredLight>>(emptyList())
     val discoveredLights: StateFlow<List<DiscoveredLight>> = _discoveredLights
@@ -71,7 +71,7 @@ class MagicshineBleController(context: Context) : LightController {
                     val name = result.advertisingData.name ?: return@collect
                     val address = result.peripheral.address
                     if (MagicshineProtocol.SUPPORTED_NAME_PREFIXES.any { name.startsWith(it, ignoreCase = true) }) {
-                        if (address !in devices) {
+                        if (!devices.containsKey(address)) {
                             Timber.d("$TAG: Found Magicshine: $name ($address)")
                             devices[address] = BleDevice(result.peripheral, name)
                             deviceConfigs[address] = MagicshineDeviceConfig.forDevice(name)
@@ -91,7 +91,7 @@ class MagicshineBleController(context: Context) : LightController {
 
     fun connect(address: String) {
         val device = devices[address] ?: return
-        if (address in characteristics) return
+        if (characteristics.containsKey(address)) return
         connectToPeripheral(address, device.peripheral)
     }
 
@@ -230,7 +230,7 @@ class MagicshineBleController(context: Context) : LightController {
                 name = device.name,
                 manufacturer = "Magicshine",
                 protocol = LightProtocol.BLE,
-                connected = address in characteristics,
+                connected = characteristics.containsKey(address),
                 batteryPercent = batteryLevels[address],
                 temperature = temperatures[address],
             )
@@ -291,7 +291,7 @@ class MagicshineBleController(context: Context) : LightController {
     }
 
     fun allConnected(deviceIds: Set<String>): Boolean =
-        deviceIds.all { it in characteristics }
+        deviceIds.all { characteristics.containsKey(it) }
 
     fun destroy() {
         stopDiscovery()

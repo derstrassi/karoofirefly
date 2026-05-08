@@ -18,13 +18,13 @@ object MagicshineProtocol {
     private const val FLAG_SAVE: Byte = 0xBB.toByte()
 
     fun buildBrightCommand(
-        whitch: Int,
+        presetIndex: Int,
         channel: Int,
         model: Int,
         bright: Int,
     ): ByteArray {
         val content = ByteArray(14)
-        content[0] = whitch.toByte()
+        content[0] = presetIndex.toByte()
         val offset = channel * 3 + 1
         content[offset] = 0x01
         content[offset + 1] = model.toByte()
@@ -50,7 +50,7 @@ object MagicshineProtocol {
         return hexStringToBytes(hex)
     }
 
-    private val MODULE2_OFF = hexStringToBytes("DE14A20101010100000000000000000000BB0DED")
+    val MODULE2_OFF = hexStringToBytes("DE14A20101010100000000000000000000BB0DED")
 
     private fun buildFrame(type: Byte, status: Byte, content: ByteArray): ByteArray {
         val totalLen = 6 + content.size
@@ -88,7 +88,7 @@ data class MagicshineDeviceConfig(
     fun buildCommand(modeId: String): ByteArray? {
         if (modeId == "OFF") return when (moduleType) {
             MagicshineModuleType.M1 -> MagicshineProtocol.buildOffCommand(1)
-            MagicshineModuleType.M2 -> MagicshineProtocol.hexStringToBytes("DE14A20101010100000000000000000000BB0DED")
+            MagicshineModuleType.M2 -> MagicshineProtocol.MODULE2_OFF
         }
         val parts = modeId.split("_", limit = 2)
         if (parts.size != 2) return null
