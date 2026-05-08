@@ -49,6 +49,8 @@ class MagicshineBleController(context: Context) : LightController {
     private val devices = mutableMapOf<String, BleDevice>()
     private val characteristics = mutableMapOf<String, RemoteCharacteristic>()
     private val deviceConfigs = mutableMapOf<String, MagicshineDeviceConfig>()
+    private val batteryLevels = mutableMapOf<String, Int>()
+    private val temperatures = mutableMapOf<String, Int>()
 
     private val _discoveredLights = MutableStateFlow<List<DiscoveredLight>>(emptyList())
     val discoveredLights: StateFlow<List<DiscoveredLight>> = _discoveredLights
@@ -57,6 +59,8 @@ class MagicshineBleController(context: Context) : LightController {
 
     private var scanJob: Job? = null
     private val connectionJobs = mutableMapOf<String, Job>()
+
+    var assignedDeviceIds: Set<String> = emptySet()
 
     fun startDiscovery() {
         if (scanJob != null) return
@@ -71,9 +75,11 @@ class MagicshineBleController(context: Context) : LightController {
                             Timber.d("$TAG: Found Magicshine: $name ($address)")
                             devices[address] = BleDevice(result.peripheral, name)
                             deviceConfigs[address] = MagicshineDeviceConfig.forDevice(name)
-                            Timber.d("$TAG: Device config for $name: channel=${deviceConfigs[address]!!.channel}")
+                            Timber.d("$TAG: Device config for $name: module=${deviceConfigs[address]!!.moduleType}")
                             updateDiscoveredLights()
-                            connectToPeripheral(address, result.peripheral)
+                            if (address in assignedDeviceIds) {
+                                connectToPeripheral(address, result.peripheral)
+                            }
                         }
                     }
                 }
@@ -81,6 +87,12 @@ class MagicshineBleController(context: Context) : LightController {
                 Timber.e(e, "$TAG: BLE scan error")
             }
         }
+    }
+
+    fun connect(address: String) {
+        val device = devices[address] ?: return
+        if (address in characteristics) return
+        connectToPeripheral(address, device.peripheral)
     }
 
     fun stopDiscovery() {
@@ -129,6 +141,22 @@ class MagicshineBleController(context: Context) : LightController {
                 if (characteristic != null) {
                     characteristics[address] = characteristic
                     Timber.d("$TAG: Connected to $address, characteristic found")
+
+                    scope.launch {
+                        try {
+                            characteristic.subscribe().collect { data ->
+                                parseNotification(address, data)
+                            }
+                        } catch (_: Exception) { }
+                    }
+
+                    delay(180)
+                    // Query battery and device info
+                    writeBytes(address, MagicshineProtocol.buildQuery(0xA4.toByte()))
+                    delay(100)
+                    writeBytes(address, MagicshineProtocol.buildQuery(0xA1.toByte()))
+
+                    updateDiscoveredLights()
                     onDeviceConnected?.invoke()
                 } else {
                     Timber.w("$TAG: Characteristic not found for $address")
@@ -202,8 +230,64 @@ class MagicshineBleController(context: Context) : LightController {
                 name = device.name,
                 manufacturer = "Magicshine",
                 protocol = LightProtocol.BLE,
+                connected = address in characteristics,
+                batteryPercent = batteryLevels[address],
+                temperature = temperatures[address],
             )
         }
+    }
+
+    private fun parseNotification(address: String, data: ByteArray) {
+        if (data.size < 6) return
+        Timber.d("$TAG: Notification from $address: ${MagicshineProtocol.bytesToHex(data)}")
+        val type = data[2].toInt() and 0xFF
+        val content = if (data.size > 6) data.sliceArray(4 until data.size - 2) else byteArrayOf()
+
+        when (type) {
+            0xB4 -> {
+                // Battery: content[4]
+                if (content.size >= 5) {
+                    val battery = content[4].toInt() and 0xFF
+                    if (battery in 0..100) {
+                        batteryLevels[address] = battery
+                        Timber.d("$TAG: Battery $address: $battery%")
+                    }
+                    updateDiscoveredLights()
+                }
+            }
+            0xB1 -> {
+                var temp: Int? = null
+                // Try marker "1703" first (EVO 1700 etc.)
+                val hex = MagicshineProtocol.bytesToHex(data)
+                val markerIndex = hex.indexOf("1703")
+                if (markerIndex != -1 && hex.length >= markerIndex + 6) {
+                    temp = hex.substring(markerIndex + 4, markerIndex + 6).toIntOrNull(16)
+                }
+                // Fallback: content[4] with sign at content[5] (Hori 1300)
+                if (temp == null && content.size >= 6) {
+                    val rawTemp = content[4].toInt() and 0xFF
+                    val sign = content[5].toInt() and 0xFF
+                    temp = if (sign == 0 && rawTemp > 0) -rawTemp else rawTemp
+                }
+                if (temp != null && temp in -40..120) {
+                    temperatures[address] = temp
+                    Timber.d("$TAG: Temperature $address: ${temp}°C")
+                    updateDiscoveredLights()
+                }
+            }
+        }
+    }
+
+    fun disconnect(address: String) {
+        Timber.d("$TAG: Disconnecting $address")
+        connectionJobs[address]?.cancel()
+        connectionJobs.remove(address)
+        characteristics.remove(address)
+        devices.remove(address)
+        deviceConfigs.remove(address)
+        batteryLevels.remove(address)
+        temperatures.remove(address)
+        updateDiscoveredLights()
     }
 
     fun allConnected(deviceIds: Set<String>): Boolean =

@@ -35,6 +35,9 @@ data class DiscoveredLight(
     val name: String,
     val manufacturer: String? = null,
     val protocol: LightProtocol = LightProtocol.ANT_PLUS,
+    val connected: Boolean = true,
+    val batteryPercent: Int? = null,
+    val temperature: Int? = null,
 )
 
 class KarooLightControllerExtension : KarooExtension("karoo-light-controller", BuildConfig.VERSION_NAME) {
@@ -63,6 +66,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
     internal lateinit var repository: PreferencesRepository
 
     private val _antLights = MutableStateFlow<List<DiscoveredLight>>(emptyList())
+    private val antConnectionStatus = mutableMapOf<String, Boolean>()
     private val _discoveredLights = MutableStateFlow<List<DiscoveredLight>>(emptyList())
     val discoveredLights: StateFlow<List<DiscoveredLight>> = _discoveredLights
 
@@ -103,7 +107,16 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                         DayTimeZone.NIGHT -> assignment.nightMode
                     }
                 }
-                lightControllers[assignment.protocol]?.setMode(assignment.deviceId, modeName)
+                if (assignment.protocol == LightProtocol.ANT_PLUS) {
+                    val success = lightControl.setLightMode(assignment.deviceId, modeName)
+                    val prev = antConnectionStatus[assignment.deviceId]
+                    if (prev != success) {
+                        antConnectionStatus[assignment.deviceId] = success
+                        updateAntLights()
+                    }
+                } else {
+                    lightControllers[assignment.protocol]?.setMode(assignment.deviceId, modeName)
+                }
             }
         }
 
@@ -140,7 +153,6 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                 setupConsumers()
                 loadSettings()
                 discoverKarooLights()
-                startBleIfNeeded()
             }
         }
     }
@@ -153,6 +165,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         karooSystem.addConsumer<RideState> { state ->
             handleRideState(state)
         }
+
     }
 
     private fun handleRideState(state: RideState) {
@@ -180,7 +193,34 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
             timeController.dawnOffsetMinutes = settings.dawnOffsetMinutes
             timeController.duskOffsetMinutes = settings.duskOffsetMinutes
             engine.updateAmbientSensor()
+            syncBleAssignments()
+            startBleIfNeeded()
         }
+    }
+
+    private fun syncBleAssignments() {
+        magicshineController.assignedDeviceIds = engine.settings.lightAssignments
+            .filter { it.protocol == LightProtocol.BLE }
+            .map { it.deviceId }
+            .toSet()
+    }
+
+    fun testMode(deviceId: String, modeName: String) {
+        val assignment = engine.settings.lightAssignments.find { it.deviceId == deviceId } ?: return
+        extensionScope.launch {
+            lightControllers[assignment.protocol]?.setMode(deviceId, modeName)
+            kotlinx.coroutines.delay(3000)
+            lightControllers[assignment.protocol]?.setMode(deviceId, "OFF")
+        }
+    }
+
+    fun onAssignmentChanged() {
+        syncBleAssignments()
+        // Connect newly assigned BLE lights
+        for (id in magicshineController.assignedDeviceIds) {
+            magicshineController.connect(id)
+        }
+        startBleIfNeeded()
     }
 
     fun setSettingsUiActive(active: Boolean) {
@@ -228,11 +268,37 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                     parts.size >= 3 && parts[1].toIntOrNull() == DEVICE_TYPE_BIKE_LIGHT
                 }
 
-                val discovered = lights.map { DiscoveredLight(it.id, it.name, it.details?.manufacturer) }
-                _antLights.value = discovered
+                antDeviceCache = lights.map { device ->
+                    val batteryText = device.details?.lastBattery?.name
+                    val batteryPercent = when (batteryText) {
+                        "GOOD" -> 80
+                        "OK" -> 50
+                        "LOW" -> 20
+                        "CRITICAL" -> 5
+                        else -> null
+                    }
+                    val connected = batteryText != null && batteryText != "NEW" && batteryText != "INVALID"
+                    AntDeviceInfo(device.id, device.name, device.details?.manufacturer, batteryPercent, connected)
+                }
+                updateAntLights()
 
-                Timber.d("$TAG: Found ${discovered.size} ANT+ bike light(s): ${discovered.joinToString { "${it.name} (${it.id})" }}")
+                Timber.d("$TAG: Found ${antDeviceCache.size} ANT+ bike light(s): ${antDeviceCache.joinToString { "${it.name} (${it.id})" }}")
             }
+        }
+    }
+
+    private data class AntDeviceInfo(val id: String, val name: String, val manufacturer: String?, val batteryPercent: Int?, val connected: Boolean)
+    private var antDeviceCache = listOf<AntDeviceInfo>()
+
+    private fun updateAntLights() {
+        _antLights.value = antDeviceCache.map { device ->
+            DiscoveredLight(
+                id = device.id,
+                name = device.name,
+                manufacturer = device.manufacturer,
+                connected = antConnectionStatus[device.id] ?: device.connected,
+                batteryPercent = device.batteryPercent,
+            )
         }
     }
 

@@ -65,6 +65,7 @@ dependencies {
     implementation(libs.sunrise.sunset)
     implementation(libs.timber)
     implementation(libs.kotlinx.serialization.json)
+    implementation("androidx.compose.material:material-icons-extended")
     implementation(libs.nordic.ble.client)
 
     // ANT Android SDK - place ant-lib.aar in app/libs/

@@ -56,7 +56,9 @@ fun modeProviderFor(protocol: LightProtocol, deviceId: String? = null): LightMod
         if (config != null) {
             io.github.derstrassi.karoofirefly.ble.MagicshineDeviceModeProvider(config)
         } else {
-            AntPlusModeProvider
+            io.github.derstrassi.karoofirefly.ble.MagicshineDeviceModeProvider(
+                io.github.derstrassi.karoofirefly.ble.MagicshineDeviceConfig.forDevice("M1"),
+            )
         }
     }
 }
