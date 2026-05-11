@@ -114,7 +114,7 @@ fun SettingsScreen(
             )
         }
         Text(
-            "Automatic ANT+ light control based on time of day and ambient light.",
+            "Automatic ANT+ and Bluetooth light control based on time of day and ambient light.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
