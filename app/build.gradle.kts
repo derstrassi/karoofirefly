@@ -7,14 +7,14 @@ plugins {
 
 android {
     namespace = "io.github.derstrassi.karoofirefly"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "io.github.derstrassi.karoofirefly"
         minSdk = 23
         targetSdk = 34
-        versionCode = 6
-        versionName = "0.4.1"
+        versionCode = 7
+        versionName = "0.5-beta"
     }
 
     signingConfigs {
@@ -65,6 +65,8 @@ dependencies {
     implementation(libs.sunrise.sunset)
     implementation(libs.timber)
     implementation(libs.kotlinx.serialization.json)
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation(libs.nordic.ble.client)
 
     // ANT Android SDK - place ant-lib.aar in app/libs/
     // Download from: https://github.com/ant-wireless/ANT-Android-SDKs

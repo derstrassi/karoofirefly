@@ -1,10 +1,8 @@
 package io.github.derstrassi.karoofirefly.engine
 
-import io.github.derstrassi.karoofirefly.ant.LightMode
 import io.github.derstrassi.karoofirefly.data.DayTimeZone
 import io.github.derstrassi.karoofirefly.data.LightControlMode
 import io.github.derstrassi.karoofirefly.data.LightControllerSettings
-import io.github.derstrassi.karoofirefly.data.LightProfile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -17,14 +15,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
-/**
- * Central state machine for light control.
- *
- * Priority (high → low):
- * 1. Manual Override — user pressed BonusAction → holds until zone change or ride state change
- * 2. Auto Mode — DayTimeZone determines baseline profile
- * 3. Ride State — lights off when ride ends
- */
 class LightControlEngine(
     private val timeController: TimeBasedController,
     private val ambientLightSensor: AmbientLightSensor? = null,
@@ -40,17 +30,14 @@ class LightControlEngine(
         PAUSED,
     }
 
-    /** Callback to set light modes. Called with (frontKarooModeName, rearKarooModeName). */
-    var onSetModes: ((String, String) -> Unit)? = null
+    var onApplyZone: ((DayTimeZone?) -> Unit)? = null
 
-    /** Callback when the light zone changes. Called with (oldZone, newZone, reason, frontMode, rearMode). */
-    var onZoneChange: ((DayTimeZone, DayTimeZone, String, LightMode, LightMode) -> Unit)? = null
+    var onZoneChange: ((DayTimeZone, DayTimeZone, String) -> Unit)? = null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var zoneCheckJob: Job? = null
     private var sensorObserveJob: Job? = null
 
-    /** The zone at the time the manual override started — override clears on zone change. */
     private var overrideZone: DayTimeZone? = null
 
     private val _state = MutableStateFlow(EngineState.IDLE)
@@ -59,11 +46,8 @@ class LightControlEngine(
     private val _currentZone = MutableStateFlow(DayTimeZone.DAY)
     val currentZone: StateFlow<DayTimeZone> = _currentZone
 
-    private val _currentFrontMode = MutableStateFlow(LightMode.OFF)
-    val currentFrontMode: StateFlow<LightMode> = _currentFrontMode
-
-    private val _currentRearMode = MutableStateFlow(LightMode.OFF)
-    val currentRearMode: StateFlow<LightMode> = _currentRearMode
+    private val _activeZone = MutableStateFlow<DayTimeZone?>(null)
+    val activeZone: StateFlow<DayTimeZone?> = _activeZone
 
     var settings: LightControllerSettings = LightControllerSettings()
 
@@ -71,7 +55,6 @@ class LightControlEngine(
         Timber.d("LightControlEngine: ride started")
         if (settings.controlMode == LightControlMode.MANUAL_ONLY) return
         if (settings.autoOnWithRide) {
-            // Restore override state if resuming from pause
             _state.value = if (overrideZone != null) EngineState.MANUAL_OVERRIDE else EngineState.AUTO_CONTROL
             applyAutoMode()
             startZoneChecking()
@@ -81,6 +64,9 @@ class LightControlEngine(
     fun onRidePause() {
         Timber.d("LightControlEngine: ride paused")
         _state.value = EngineState.PAUSED
+        if (settings.autoOffOnPause) {
+            applyZone(null)
+        }
     }
 
     fun onRideStop() {
@@ -89,62 +75,52 @@ class LightControlEngine(
         overrideZone = null
         _state.value = EngineState.IDLE
         if (settings.autoOffWithRide) {
-            setModes(LightMode.OFF, LightMode.OFF)
+            applyZone(null)
         }
     }
 
     fun onToggleLights() {
         _state.value = EngineState.MANUAL_OVERRIDE
-        val zone = determineCurrentZone()
-        overrideZone = zone
-        if (_currentFrontMode.value != LightMode.OFF || _currentRearMode.value != LightMode.OFF) {
-            setModes(LightMode.OFF, LightMode.OFF)
+        overrideZone = determineCurrentZone()
+        if (_activeZone.value != null) {
+            applyZone(null)
         } else {
-            val (front, rear) = resolveOnModes(zone)
-            setModes(front, rear)
+            val zone = resolveOnZone()
+            applyZone(zone)
         }
     }
 
-    private fun resolveOnModes(zone: DayTimeZone): Pair<LightMode, LightMode> {
-        val (f, r) = getModesForZone(zone, settings.profile)
-        val front = LightMode.fromModeNumber(f) ?: LightMode.OFF
-        val rear = LightMode.fromModeNumber(r) ?: LightMode.OFF
-        if (front != LightMode.OFF || rear != LightMode.OFF) return Pair(front, rear)
-
+    private fun resolveOnZone(): DayTimeZone {
+        val zone = determineCurrentZone()
+        if (hasModesForZone(zone)) return zone
         val otherZone = if (zone == DayTimeZone.DAY) DayTimeZone.NIGHT else DayTimeZone.DAY
-        val (of, or2) = getModesForZone(otherZone, settings.profile)
-        val otherFront = LightMode.fromModeNumber(of) ?: LightMode.OFF
-        val otherRear = LightMode.fromModeNumber(or2) ?: LightMode.OFF
-        if (otherFront != LightMode.OFF || otherRear != LightMode.OFF) return Pair(otherFront, otherRear)
+        if (hasModesForZone(otherZone)) return otherZone
+        return DayTimeZone.DAY
+    }
 
-        return Pair(LightMode.STEADY_HIGH, LightMode.STEADY_HIGH)
+    private fun hasModesForZone(zone: DayTimeZone): Boolean {
+        return settings.lightAssignments.any { it.modeForZone(zone) != "OFF" }
     }
 
     fun onCycleMode() {
         _state.value = EngineState.MANUAL_OVERRIDE
         overrideZone = determineCurrentZone()
 
-        val profile = settings.profile
-        val dayFront = LightMode.fromModeNumber(profile.dayModeFront) ?: LightMode.OFF
-        val dayRear = LightMode.fromModeNumber(profile.dayModeRear) ?: LightMode.OFF
-        val nightFront = LightMode.fromModeNumber(profile.nightModeFront) ?: LightMode.OFF
-        val nightRear = LightMode.fromModeNumber(profile.nightModeRear) ?: LightMode.OFF
-        val dayIsOff = dayFront == LightMode.OFF && dayRear == LightMode.OFF
-        val nightIsOff = nightFront == LightMode.OFF && nightRear == LightMode.OFF
-        val currentlyOff = _currentFrontMode.value == LightMode.OFF && _currentRearMode.value == LightMode.OFF
+        val dayHasModes = hasModesForZone(DayTimeZone.DAY)
+        val nightHasModes = hasModesForZone(DayTimeZone.NIGHT)
 
-        when {
-            currentlyOff -> {
-                if (!dayIsOff) setModes(dayFront, dayRear)
-                else if (!nightIsOff) setModes(nightFront, nightRear)
-                else setModes(LightMode.STEADY_HIGH, LightMode.STEADY_HIGH)
+        when (_activeZone.value) {
+            null -> {
+                if (dayHasModes) applyZone(DayTimeZone.DAY)
+                else if (nightHasModes) applyZone(DayTimeZone.NIGHT)
+                else applyZone(DayTimeZone.DAY)
             }
-            !dayIsOff && _currentFrontMode.value == dayFront && _currentRearMode.value == dayRear -> {
-                if (!nightIsOff) setModes(nightFront, nightRear)
-                else setModes(LightMode.OFF, LightMode.OFF)
+            DayTimeZone.DAY -> {
+                if (nightHasModes) applyZone(DayTimeZone.NIGHT)
+                else applyZone(null)
             }
-            else -> {
-                setModes(LightMode.OFF, LightMode.OFF)
+            DayTimeZone.NIGHT -> {
+                applyZone(null)
             }
         }
     }
@@ -152,7 +128,6 @@ class LightControlEngine(
     private fun applyAutoMode() {
         val zone = determineCurrentZone()
 
-        // During manual override, only clear it when the zone changes
         if (_state.value == EngineState.MANUAL_OVERRIDE) {
             if (zone != overrideZone) {
                 Timber.d("Zone changed during override ($overrideZone → $zone), resuming auto control")
@@ -164,14 +139,10 @@ class LightControlEngine(
         }
 
         val previousZone = _currentZone.value
-        if (zone == previousZone && _currentFrontMode.value != LightMode.OFF) return
+        if (zone == previousZone && _activeZone.value != null) return
 
         _currentZone.value = zone
-
-        val (frontNum, rearNum) = getModesForZone(zone, settings.profile)
-        val front = LightMode.fromModeNumber(frontNum) ?: LightMode.OFF
-        val rear = LightMode.fromModeNumber(rearNum) ?: LightMode.OFF
-        setModes(front, rear)
+        applyZone(zone)
 
         if (zone != previousZone) {
             val reason = when (settings.controlMode) {
@@ -183,19 +154,16 @@ class LightControlEngine(
                 }
                 LightControlMode.MANUAL_ONLY -> "Manual"
             }
-            Timber.d("Zone: $previousZone → $zone ($reason, front=${front.karooName}, rear=${rear.karooName})")
-            onZoneChange?.invoke(previousZone, zone, reason, front, rear)
+            Timber.d("Zone: $previousZone → $zone ($reason)")
+            onZoneChange?.invoke(previousZone, zone, reason)
         }
     }
 
-    /**
-     * Determines the current zone based on the configured control mode.
-     *
-     * - TIME_BASED: uses sunrise/sunset only
-     * - AMBIENT_LIGHT: uses the light sensor only
-     * - COMBINED: time-based as baseline, sensor can darken but not brighten
-     *   (e.g. tunnel during DAY → NIGHT, but headlights at NIGHT stay NIGHT)
-     */
+    private fun applyZone(zone: DayTimeZone?) {
+        _activeZone.value = zone
+        onApplyZone?.invoke(zone)
+    }
+
     private fun determineCurrentZone(): DayTimeZone {
         return when (settings.controlMode) {
             LightControlMode.MANUAL_ONLY -> DayTimeZone.DAY
@@ -206,17 +174,11 @@ class LightControlEngine(
             LightControlMode.COMBINED -> {
                 val timeZone = timeController.getCurrentZone()
                 val sensorZone = ambientLightSensor?.currentLightZone?.value ?: timeZone
-                // Sensor can only darken (make zone "worse"), never brighten
                 if (sensorZone.ordinal > timeZone.ordinal) sensorZone else timeZone
             }
         }
     }
 
-    /**
-     * Start or stop the ambient light sensor based on the current control mode.
-     * Called when settings change — the sensor runs continuously when needed,
-     * independent of ride state (TYPE_LIGHT is extremely low-power).
-     */
     fun updateAmbientSensor() {
         ambientLightSensor?.let {
             if (settings.controlMode == LightControlMode.AMBIENT_LIGHT || settings.controlMode == LightControlMode.COMBINED) {
@@ -246,10 +208,6 @@ class LightControlEngine(
         sensorObserveJob = null
     }
 
-    /**
-     * Enable or disable debug mode. When enabled, the engine enters AUTO_CONTROL
-     * and starts zone checking without requiring an active ride.
-     */
     fun setDebugMode(enabled: Boolean) {
         if (enabled) {
             Timber.d("LightControlEngine: debug mode ON")
@@ -260,26 +218,13 @@ class LightControlEngine(
             Timber.d("LightControlEngine: debug mode OFF")
             stopZoneChecking()
             _state.value = EngineState.IDLE
-            setModes(LightMode.OFF, LightMode.OFF)
+            applyZone(null)
         }
     }
 
-    fun setDebugLightMode(mode: LightMode) {
-        Timber.d("LightControlEngine: debug set mode ${mode.displayName}")
-        setModes(mode, mode)
-    }
-
-    private fun setModes(front: LightMode, rear: LightMode) {
-        _currentFrontMode.value = front
-        _currentRearMode.value = rear
-        onSetModes?.invoke(front.karooName, rear.karooName)
-    }
-
-    private fun getModesForZone(zone: DayTimeZone, profile: LightProfile): Pair<Int, Int> {
-        return when (zone) {
-            DayTimeZone.DAY -> Pair(profile.dayModeFront, profile.dayModeRear)
-            DayTimeZone.NIGHT -> Pair(profile.nightModeFront, profile.nightModeRear)
-        }
+    fun setDebugZone(zone: DayTimeZone) {
+        Timber.d("LightControlEngine: debug set zone ${zone.name}")
+        applyZone(zone)
     }
 
     private fun startZoneChecking() {

@@ -24,9 +24,8 @@ class LightStatusDataType(
 ) : DataTypeImpl("karoo-light-controller", "light-status") {
 
     companion object {
-        const val FIELD_FRONT_MODE = "front_mode"
-        const val FIELD_REAR_MODE = "rear_mode"
         const val FIELD_ZONE = "zone"
+        const val FIELD_ACTIVE = "active"
     }
 
     override fun startStream(emitter: Emitter<StreamState>) {
@@ -34,14 +33,12 @@ class LightStatusDataType(
 
         scope.launch {
             combine(
-                engine.currentFrontMode,
-                engine.currentRearMode,
+                engine.activeZone,
                 engine.currentZone,
-            ) { frontMode, rearMode, zone ->
+            ) { activeZone, currentZone ->
                 mapOf(
-                    FIELD_FRONT_MODE to frontMode.modeNumber.toDouble(),
-                    FIELD_REAR_MODE to rearMode.modeNumber.toDouble(),
-                    FIELD_ZONE to zone.ordinal.toDouble(),
+                    FIELD_ZONE to currentZone.ordinal.toDouble(),
+                    FIELD_ACTIVE to if (activeZone != null) 1.0 else 0.0,
                 )
             }.distinctUntilChanged().collect { values ->
                 emitter.onNext(
@@ -62,17 +59,16 @@ class LightStatusDataType(
 
         scope.launch {
             combine(
-                engine.currentFrontMode,
-                engine.currentRearMode,
+                engine.activeZone,
                 engine.state,
-            ) { frontMode, rearMode, state ->
-                Triple(frontMode, rearMode, state)
-            }.distinctUntilChanged().collect { (frontMode, rearMode, state) ->
+            ) { activeZone, state ->
+                Pair(activeZone, state)
+            }.distinctUntilChanged().collect { (activeZone, state) ->
                 val remoteViews = RemoteViews(context.packageName, R.layout.light_status_view)
 
                 val modeText = when (state) {
                     LightControlEngine.EngineState.IDLE -> "Lights Off"
-                    else -> "F: ${frontMode.displayName} | R: ${rearMode.displayName}"
+                    else -> if (activeZone != null) "Zone: ${activeZone.name}" else "Lights Off"
                 }
 
                 remoteViews.setTextViewText(R.id.light_mode_text, modeText)

@@ -1,6 +1,11 @@
 package io.github.derstrassi.karoofirefly.ui.screens
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,9 +16,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -36,13 +45,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.github.derstrassi.karoofirefly.DiscoveredLight
 import io.github.derstrassi.karoofirefly.R
-import io.github.derstrassi.karoofirefly.ant.LightMode
+import io.github.derstrassi.karoofirefly.data.DayTimeZone
 import io.github.derstrassi.karoofirefly.data.LightAssignment
 import io.github.derstrassi.karoofirefly.data.LightControlMode
 import io.github.derstrassi.karoofirefly.data.LightControllerSettings
+import io.github.derstrassi.karoofirefly.data.LightProtocol
 import io.github.derstrassi.karoofirefly.data.LightRole
+import io.github.derstrassi.karoofirefly.data.modeProviderFor
 import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,19 +63,18 @@ fun SettingsScreen(
     settings: LightControllerSettings,
     discoveredLights: List<DiscoveredLight> = emptyList(),
     currentLux: Float = 0f,
-    currentLightMode: LightMode = LightMode.OFF,
     sunriseTime: Calendar? = null,
     sunsetTime: Calendar? = null,
     onSave: (LightControllerSettings) -> Unit,
-    onNavigateToProfiles: () -> Unit,
-    onDebugToggle: (Boolean) -> Unit = {},
-    onSetMode: (LightMode) -> Unit = {},
-    onTestNotification: () -> Unit = {},
+    onUpdateAssignment: (String, LightAssignment?) -> Unit = { _, _ -> },
+    onDeleteLight: (DiscoveredLight) -> Unit = {},
+    onTestMode: (String, String) -> Unit = { _, _ -> },
 ) {
     var dawnOffset by remember(settings) { mutableFloatStateOf(settings.dawnOffsetMinutes.toFloat()) }
     var duskOffset by remember(settings) { mutableFloatStateOf(settings.duskOffsetMinutes.toFloat()) }
     var autoOn by remember(settings) { mutableStateOf(settings.autoOnWithRide) }
     var autoOff by remember(settings) { mutableStateOf(settings.autoOffWithRide) }
+    var autoOffPause by remember(settings) { mutableStateOf(settings.autoOffOnPause) }
     var useTimeBased by remember(settings) { mutableStateOf(settings.useTimeBased) }
     var useAmbientLight by remember(settings) { mutableStateOf(settings.useAmbientLight) }
     var nightThreshold by remember(settings) { mutableIntStateOf(settings.ambientNightThreshold) }
@@ -76,6 +87,7 @@ fun SettingsScreen(
                 duskOffsetMinutes = duskOffset.toInt(),
                 autoOnWithRide = autoOn,
                 autoOffWithRide = autoOff,
+                autoOffOnPause = autoOffPause,
                 lightControlMode = LightControlMode.fromFlags(useTimeBased, useAmbientLight).name,
                 ambientNightThreshold = nightThreshold,
                 zoneNotificationsEnabled = zoneNotifications,
@@ -102,7 +114,7 @@ fun SettingsScreen(
             )
         }
         Text(
-            "Automatic ANT+ light control based on time of day and ambient light.",
+            "Automatic ANT+ and Bluetooth light control based on time of day and ambient light.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -113,32 +125,54 @@ fun SettingsScreen(
         Text("Connected Lights", style = MaterialTheme.typography.titleSmall)
         Spacer(modifier = Modifier.height(8.dp))
 
-        if (discoveredLights.isEmpty()) {
+        var selectedLight by remember { mutableStateOf<DiscoveredLight?>(null) }
+
+        val discoveredIds = discoveredLights.map { it.id }.toSet()
+        val savedButNotFound = settings.lightAssignments.filter { it.deviceId !in discoveredIds }
+
+        val allLights = (discoveredLights + savedButNotFound.map {
+            DiscoveredLight(it.deviceId, it.deviceName, null, it.protocol, connected = false)
+        }).sortedWith(compareBy<DiscoveredLight> {
+            val isConfigured = settings.lightAssignments.any { a -> a.deviceId == it.id }
+            when {
+                !isConfigured -> 0
+                it.connected -> 1
+                else -> 2
+            }
+        })
+
+        if (allLights.isEmpty()) {
             Text(
                 "No lights found. Pair lights in Karoo's sensor settings.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            for (light in discoveredLights) {
-                val currentAssignment = settings.lightAssignments.find { it.deviceId == light.id }
-                LightRoleSelector(
+            allLights.forEachIndexed { index, light ->
+                val assignment = settings.lightAssignments.find { it.deviceId == light.id }
+                LightRow(
                     light = light,
-                    currentRole = currentAssignment?.role,
-                    onRoleSelected = { role ->
-                        val updatedAssignments = settings.lightAssignments
-                            .filter { it.deviceId != light.id }
-                            .let { list ->
-                                if (role != null) {
-                                    list + LightAssignment(light.id, light.name, role)
-                                } else {
-                                    list
-                                }
-                            }
-                        onSave(settings.copy(lightAssignments = updatedAssignments))
-                    },
+                    role = assignment?.role,
+                    onClick = { selectedLight = light },
                 )
+                if (index < allLights.lastIndex) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
             }
+        }
+
+        selectedLight?.let { light ->
+            val assignment = settings.lightAssignments.find { it.deviceId == light.id }
+            LightDetailDialog(
+                light = light,
+                assignment = assignment,
+                onUpdateAssignment = { updated ->
+                    onUpdateAssignment(light.id, updated)
+                },
+                onTestMode = { deviceId, modeName -> onTestMode(deviceId, modeName) },
+                onDelete = { onDeleteLight(light) },
+                onDismiss = { selectedLight = null },
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -241,10 +275,11 @@ fun SettingsScreen(
             }
         }
 
-        if (useTimeBased || useAmbientLight) {
-            Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(8.dp))
 
-            Row(
+        Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
@@ -271,140 +306,132 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                Text("Auto-off on pause", modifier = Modifier.weight(1f))
+                Switch(checked = autoOffPause, onCheckedChange = { autoOffPause = it; saveSettings() })
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text("Zone change notifications", modifier = Modifier.weight(1f))
                 Switch(checked = zoneNotifications, onCheckedChange = { zoneNotifications = it; saveSettings() })
             }
-        }
 
         Spacer(modifier = Modifier.height(8.dp))
         HorizontalDivider()
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Debug mode toggle
-        var debugEnabled by remember { mutableStateOf(false) }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "Debug mode",
-                modifier = Modifier.weight(1f),
-            )
-            Switch(
-                checked = debugEnabled,
-                onCheckedChange = {
-                    debugEnabled = it
-                    onDebugToggle(it)
-                },
-            )
-        }
-
-        if (debugEnabled) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(onClick = onTestNotification, modifier = Modifier.fillMaxWidth()) {
-                Text("Test Zone Notification")
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            var debugModeExpanded by remember { mutableStateOf(false) }
-            ExposedDropdownMenuBox(
-                expanded = debugModeExpanded,
-                onExpandedChange = { debugModeExpanded = it },
-            ) {
-                TextField(
-                    value = currentLightMode.displayName,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Light Mode") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = debugModeExpanded) },
-                    modifier = Modifier
-                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth(),
-                )
-                ExposedDropdownMenu(
-                    expanded = debugModeExpanded,
-                    onDismissRequest = { debugModeExpanded = false },
-                ) {
-                    LightMode.entries.forEach { mode ->
-                        DropdownMenuItem(
-                            text = { Text(mode.displayName) },
-                            onClick = {
-                                debugModeExpanded = false
-                                onSetMode(mode)
-                            },
-                        )
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(onClick = onNavigateToProfiles, modifier = Modifier.fillMaxWidth()) {
-            Text("Light Profiles")
-        }
+        Text("Supported Lights", style = MaterialTheme.typography.titleSmall)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            "ANT+: Garmin Varia, Bontrager Ion/Flare, Magene L508, and other ANT+ smart bike lights paired through Karoo.\n\nBLE: Magicshine Hori 1300, EVO 1700, and other M1/M2 series lights.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LightRoleSelector(
+private fun ProtocolBadge(protocol: LightProtocol) {
+    val badgeShape = RoundedCornerShape(4.dp)
+    when (protocol) {
+        LightProtocol.BLE -> {
+            Row(
+                modifier = Modifier
+                    .background(Color(0xFF1565C0), badgeShape)
+                    .padding(horizontal = 4.dp, vertical = 1.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Default.Bluetooth,
+                    contentDescription = "BLE",
+                    modifier = Modifier.size(10.dp),
+                    tint = Color.White,
+                )
+                Text(
+                    "BLE",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    fontSize = 9.sp,
+                )
+            }
+        }
+        LightProtocol.ANT_PLUS -> {
+            Text(
+                "ANT+",
+                modifier = Modifier
+                    .border(1.dp, Color(0xFF616161), badgeShape)
+                    .padding(horizontal = 4.dp, vertical = 1.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF616161),
+                fontSize = 9.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LightRow(
     light: DiscoveredLight,
-    currentRole: LightRole?,
-    onRoleSelected: (LightRole?) -> Unit,
+    role: LightRole?,
+    onClick: () -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val roleLabel = when (currentRole) {
+    val isConfigured = role != null
+    val alpha = if (light.connected || !isConfigured) 1f else 0.4f
+    val roleLabel = when (role) {
         LightRole.FRONT -> "Front"
         LightRole.REAR -> "Rear"
-        null -> "—"
+        null -> "Tap to configure"
+    }
+    val statusColor = when {
+        !isConfigured -> MaterialTheme.colorScheme.tertiary
+        !light.connected -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.primary
+    }
+    val backgroundColor = when {
+        !isConfigured -> Color(0xFFFFE082)
+        !light.connected -> Color(0xFFE0E0E0)
+        else -> Color.Transparent
     }
 
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(backgroundColor, shape = MaterialTheme.shapes.small)
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp, horizontal = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+        Column(modifier = Modifier.weight(1f).alpha(alpha)) {
             Text(light.name)
-            if (light.manufacturer != null) {
-                Text(
-                    light.manufacturer,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = it },
-        ) {
-            TextField(
-                value = roleLabel,
-                onValueChange = {},
-                readOnly = true,
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).width(110.dp),
-                textStyle = MaterialTheme.typography.bodySmall,
-            )
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                DropdownMenuItem(
-                    text = { Text("Front") },
-                    onClick = { onRoleSelected(LightRole.FRONT); expanded = false },
-                )
-                DropdownMenuItem(
-                    text = { Text("Rear") },
-                    onClick = { onRoleSelected(LightRole.REAR); expanded = false },
-                )
-                DropdownMenuItem(
-                    text = { Text("None") },
-                    onClick = { onRoleSelected(null); expanded = false },
-                )
+                ProtocolBadge(light.protocol)
+                val infoText = listOfNotNull(
+                    light.manufacturer,
+                    if (!light.connected) "Disconnected" else null,
+                ).joinToString(" · ")
+                if (infoText.isNotEmpty()) {
+                    Text(
+                        infoText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
+        Text(
+            roleLabel,
+            style = MaterialTheme.typography.bodySmall,
+            color = statusColor,
+        )
     }
 }
