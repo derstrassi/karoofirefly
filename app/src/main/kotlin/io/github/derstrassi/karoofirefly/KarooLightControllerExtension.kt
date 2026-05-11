@@ -13,6 +13,8 @@ import io.github.derstrassi.karoofirefly.ble.MagicshineBleController
 import io.github.derstrassi.karoofirefly.karoo.KarooLightControl
 import io.github.derstrassi.karoofirefly.data.DayTimeZone
 import io.github.derstrassi.karoofirefly.data.LightProtocol
+import io.github.derstrassi.karoofirefly.data.LightRole
+import io.github.derstrassi.karoofirefly.data.modeProviderFor
 import io.github.derstrassi.karoofirefly.data.PreferencesRepository
 import io.github.derstrassi.karoofirefly.light.LightController
 import io.github.derstrassi.karoofirefly.datatypes.LightStatusDataType
@@ -115,7 +117,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                         icon = R.drawable.ic_firefly,
                         title = "$oldZone → $newZone ($reason)",
                         detail = buildModeDetail(newZone),
-                        autoDismissMs = 10000,
+                        autoDismissMs = 30000,
                         backgroundColor = android.R.color.black,
                         textColor = android.R.color.white,
                     ),
@@ -327,7 +329,15 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
     private fun buildModeDetail(zone: DayTimeZone?): String {
         if (zone == null) return "Lights Off"
         return engine.settings.lightAssignments.joinToString("\n") {
-            "${it.deviceName}: ${it.modeForZone(zone)}"
+            val roleLabel = when (it.role) {
+                LightRole.FRONT -> "F"
+                LightRole.REAR -> "R"
+            }
+            val modeId = it.modeForZone(zone)
+            val displayName = modeProviderFor(it.protocol, it.deviceId)
+                .availableModes()
+                .find { m -> m.id == modeId }?.displayName ?: modeId
+            "$roleLabel: $displayName"
         }
     }
 
