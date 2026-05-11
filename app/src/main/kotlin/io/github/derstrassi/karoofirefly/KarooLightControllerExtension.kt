@@ -72,7 +72,9 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
 
     private var savedDevicesConsumerId: String? = null
     private var bleStartJob: kotlinx.coroutines.Job? = null
+    private var discoveryPollingJob: kotlinx.coroutines.Job? = null
     @Volatile private var settingsUiActive = false
+    @Volatile private var rideActive = false
 
     private val extensionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -165,13 +167,16 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
     private fun handleRideState(state: RideState) {
         when (state) {
             is RideState.Recording -> {
+                rideActive = true
                 engine.onRideStart()
-                if (_discoveredLights.value.isEmpty()) {
-                    discoverKarooLights()
-                }
+                startDiscoveryPolling()
             }
             is RideState.Paused -> engine.onRidePause()
-            is RideState.Idle -> engine.onRideStop()
+            is RideState.Idle -> {
+                rideActive = false
+                stopDiscoveryPolling()
+                engine.onRideStop()
+            }
         }
     }
 
@@ -219,7 +224,41 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
 
     fun setSettingsUiActive(active: Boolean) {
         settingsUiActive = active
-        if (active) startBleIfNeeded() else stopBleIfNotNeeded()
+        if (active) {
+            startDiscoveryPolling()
+            startBleIfNeeded()
+        } else {
+            if (!rideActive) stopDiscoveryPolling()
+            stopBleIfNotNeeded()
+        }
+    }
+
+    private fun allAssignedLightsConnected(): Boolean {
+        val antAssigned = engine.settings.lightAssignments.filter { it.protocol == LightProtocol.ANT_PLUS }
+        val bleAssigned = engine.settings.lightAssignments.filter { it.protocol == LightProtocol.BLE }
+        val antOk = antAssigned.all { a -> antConnectionStatus[a.deviceId] == true }
+        val bleOk = bleAssigned.isEmpty() || magicshineController.allConnected(magicshineController.assignedDeviceIds)
+        return antOk && bleOk
+    }
+
+    private fun startDiscoveryPolling() {
+        if (discoveryPollingJob != null) return
+        discoveryPollingJob = extensionScope.launch {
+            while (true) {
+                discoverKarooLights()
+                if (allAssignedLightsConnected()) {
+                    Timber.d("$TAG: All assigned lights connected, stopping discovery polling")
+                    break
+                }
+                kotlinx.coroutines.delay(10_000)
+            }
+            discoveryPollingJob = null
+        }
+    }
+
+    private fun stopDiscoveryPolling() {
+        discoveryPollingJob?.cancel()
+        discoveryPollingJob = null
     }
 
     private fun hasBleAssignments(): Boolean =
