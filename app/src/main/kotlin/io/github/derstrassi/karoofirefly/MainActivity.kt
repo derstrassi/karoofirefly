@@ -47,7 +47,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ensureBlePermissions()
-        KarooLightControllerExtension.getInstance()?.setSettingsUiActive(true)
 
         repository = PreferencesRepository(applicationContext)
         val ext = KarooLightControllerExtension.getInstance()
@@ -72,6 +71,7 @@ class MainActivity : ComponentActivity() {
         }
 
         val luxFlow = extensionFlow.flatMapLatest {
+            it.setSettingsUiActive(true)
             if (ownsLuxSensor) {
                 luxSensor.stop()
                 ownsLuxSensor = false

@@ -66,7 +66,6 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
     internal lateinit var repository: PreferencesRepository
 
     private val _antLights = MutableStateFlow<List<DiscoveredLight>>(emptyList())
-    private val antConnectionStatus = mutableMapOf<String, Boolean>()
     private val _discoveredLights = MutableStateFlow<List<DiscoveredLight>>(emptyList())
     val discoveredLights: StateFlow<List<DiscoveredLight>> = _discoveredLights
 
@@ -103,16 +102,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         engine.onApplyZone = { zone ->
             for (assignment in engine.settings.lightAssignments) {
                 val modeName = if (zone == null) "OFF" else assignment.modeForZone(zone)
-                if (assignment.protocol == LightProtocol.ANT_PLUS) {
-                    val success = lightControl.setLightMode(assignment.deviceId, modeName)
-                    val prev = antConnectionStatus[assignment.deviceId]
-                    if (prev != success) {
-                        antConnectionStatus[assignment.deviceId] = success
-                        updateAntLights()
-                    }
-                } else {
-                    lightControllers[assignment.protocol]?.setMode(assignment.deviceId, modeName)
-                }
+                lightControllers[assignment.protocol]?.setMode(assignment.deviceId, modeName)
             }
         }
 
@@ -135,8 +125,8 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
 
         // Merge ANT+ and BLE discovered lights
         extensionScope.launch {
-            combine(_antLights, magicshineController.discoveredLights) { ant, ble ->
-                ant + ble
+            combine(_antLights, magicshineController.discoveredLights, lightControl.connectionStates) { ant, ble, connStates ->
+                ant.map { it.copy(connected = connStates[it.id] == "CONNECTED") } + ble
             }.collect { merged ->
                 _discoveredLights.value = merged
             }
@@ -223,6 +213,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
     }
 
     fun setSettingsUiActive(active: Boolean) {
+        Timber.d("$TAG: setSettingsUiActive=$active")
         settingsUiActive = active
         if (active) {
             startDiscoveryPolling()
@@ -233,12 +224,9 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         }
     }
 
-    private fun allAssignedLightsConnected(): Boolean {
-        val antAssigned = engine.settings.lightAssignments.filter { it.protocol == LightProtocol.ANT_PLUS }
-        val bleAssigned = engine.settings.lightAssignments.filter { it.protocol == LightProtocol.BLE }
-        val antOk = antAssigned.all { a -> antConnectionStatus[a.deviceId] == true }
-        val bleOk = bleAssigned.isEmpty() || magicshineController.allConnected(magicshineController.assignedDeviceIds)
-        return antOk && bleOk
+    private fun allAssignedBleConnected(): Boolean {
+        val bleAssigned = magicshineController.assignedDeviceIds
+        return bleAssigned.isEmpty() || magicshineController.allConnected(bleAssigned)
     }
 
     private fun startDiscoveryPolling() {
@@ -246,7 +234,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         discoveryPollingJob = extensionScope.launch {
             while (true) {
                 discoverKarooLights()
-                if (allAssignedLightsConnected()) {
+                if (allAssignedBleConnected()) {
                     Timber.d("$TAG: All assigned lights connected, stopping discovery polling")
                     break
                 }
@@ -308,17 +296,20 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                         "CRITICAL" -> 5
                         else -> null
                     }
-                    val connected = batteryText != null && batteryText != "NEW" && batteryText != "INVALID"
-                    AntDeviceInfo(device.id, device.name, device.details?.manufacturer, batteryPercent, connected)
+                    AntDeviceInfo(device.id, device.name, device.details?.manufacturer, batteryPercent)
                 }
                 updateAntLights()
 
                 Timber.d("$TAG: Found ${antDeviceCache.size} ANT+ bike light(s): ${antDeviceCache.joinToString { "${it.name} (${it.id})" }}")
+
+                for (device in antDeviceCache) {
+                    lightControl.registerConnectionState(device.id)
+                }
             }
         }
     }
 
-    private data class AntDeviceInfo(val id: String, val name: String, val manufacturer: String?, val batteryPercent: Int?, val connected: Boolean)
+    private data class AntDeviceInfo(val id: String, val name: String, val manufacturer: String?, val batteryPercent: Int?)
     private var antDeviceCache = listOf<AntDeviceInfo>()
 
     private fun updateAntLights() {
@@ -327,7 +318,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                 id = device.id,
                 name = device.name,
                 manufacturer = device.manufacturer,
-                connected = antConnectionStatus[device.id] ?: device.connected,
+                connected = lightControl.connectionStates.value[device.id] == "CONNECTED",
                 batteryPercent = device.batteryPercent,
             )
         }

@@ -4,11 +4,15 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.os.Binder
 import android.os.Bundle
 import android.os.IBinder
+import android.os.IInterface
 import android.os.Parcel
 import android.os.Parcelable
 import io.github.derstrassi.karoofirefly.light.LightController
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import timber.log.Timber
 
 class KarooLightControl(private val context: Context) : LightController {
@@ -17,8 +21,11 @@ class KarooLightControl(private val context: Context) : LightController {
         private const val TAG = "KarooLightControl"
         private const val SENSOR_DESCRIPTOR = "io.hammerhead.sensorservice.SensorServiceAIDL"
         private const val LIGHT_CMD_DESCRIPTOR = "io.hammerhead.sensorservice.LightCommandConnectionAIDL"
+        private const val LISTENER_DESCRIPTOR = "io.hammerhead.aidlrx.IParcelableListener"
         private const val TX_GET_LIGHT_CMD = 17
         private const val TX_SET_LIGHT_MODE = 3
+        private const val TX_REGISTER_DEVICE_CONNECTION = 10
+        private const val TX_UNREGISTER_DEVICE_CONNECTION = 11
     }
 
     private var sensorBinder: IBinder? = null
@@ -26,6 +33,12 @@ class KarooLightControl(private val context: Context) : LightController {
     private var lightModeParcelableCreator: ((String) -> Parcelable)? = null
     private var deviceCreator: ((String) -> Parcelable)? = null
     private var isBound = false
+
+    private val _connectionStates = MutableStateFlow<Map<String, String>>(emptyMap())
+    val connectionStates: StateFlow<Map<String, String>> = _connectionStates
+    private val registeredListeners = mutableSetOf<String>()
+    private val pendingRegistrations = mutableSetOf<String>()
+    var onServiceReady: (() -> Unit)? = null
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -42,6 +55,7 @@ class KarooLightControl(private val context: Context) : LightController {
             sensorBinder = null
             lightCmdBinder = null
             isBound = false
+            registeredListeners.clear()
             Timber.d("$TAG: Disconnected from SensorService")
         }
     }
@@ -51,7 +65,6 @@ class KarooLightControl(private val context: Context) : LightController {
         val reply = Parcel.obtain()
         try {
             data.writeInterfaceToken(SENSOR_DESCRIPTOR)
-            // Transaction 17 is a simple getter — no params after enforceInterface
             service.transact(TX_GET_LIGHT_CMD, data, reply, 0)
             reply.readException()
             lightCmdBinder = reply.readStrongBinder()
@@ -81,14 +94,12 @@ class KarooLightControl(private val context: Context) : LightController {
                 java.lang.Enum.valueOf(enumClass, modeName) as Parcelable
             }
 
-            // Load Device class — use the constructor with DefaultConstructorMarker
             val deviceClass = sensorCtx.classLoader.loadClass(
                 "io.hammerhead.datamodels.timeseriesData.models.Device",
             )
             val defaultMarkerClass = sensorCtx.classLoader.loadClass(
                 "kotlin.jvm.internal.DefaultConstructorMarker",
             )
-            // Find the constructor with (String, ..., int, DefaultConstructorMarker)
             val deviceConstructor = deviceClass.constructors.find { c ->
                 c.parameterTypes.lastOrNull() == defaultMarkerClass &&
                     c.parameterTypes[c.parameterTypes.size - 2] == Int::class.javaPrimitiveType
@@ -102,15 +113,12 @@ class KarooLightControl(private val context: Context) : LightController {
                 deviceCreator = { uid ->
                     val deviceInfo = deviceInfoConstructor.newInstance()
                     val params = arrayOfNulls<Any>(deviceConstructor.parameterTypes.size)
-                    params[0] = uid                    // uid: String
-                    params[1] = deviceInfo             // info: DeviceInfo (non-null)
-                    // params[2] = null               // supportedDataTypes: List
-                    // params[3] = null               // blockedDataTypes: List
-                    params[4] = false                  // isConnectedAtLeastOnce: boolean
-                    params[5] = true                   // isEnabled: boolean
-                    // params[6..16] = null            // nullable fields
-                    params[params.size - 2] = 0x1FFFC  // defaults: skip all except uid(0), info(1), bool(4), bool(5)
-                    params[params.size - 1] = null     // DefaultConstructorMarker
+                    params[0] = uid
+                    params[1] = deviceInfo
+                    params[4] = false
+                    params[5] = true
+                    params[params.size - 2] = 0x1FFFC
+                    params[params.size - 1] = null
                     deviceConstructor.newInstance(*params) as Parcelable
                 }
                 Timber.d("$TAG: Device creator ready")
@@ -119,6 +127,10 @@ class KarooLightControl(private val context: Context) : LightController {
             }
 
             Timber.d("$TAG: LightMode class loaded")
+
+            pendingRegistrations.toList().forEach { registerConnectionState(it) }
+            pendingRegistrations.clear()
+            onServiceReady?.invoke()
         } catch (e: Exception) {
             Timber.e(e, "$TAG: Failed to load LightMode class")
         }
@@ -140,6 +152,7 @@ class KarooLightControl(private val context: Context) : LightController {
     }
 
     fun unbind() {
+        registeredListeners.toList().forEach { unregisterConnectionState(it) }
         if (isBound) {
             try { context.unbindService(serviceConnection) } catch (_: Exception) {}
             isBound = false
@@ -148,12 +161,6 @@ class KarooLightControl(private val context: Context) : LightController {
         }
     }
 
-    /**
-     * Set the light mode for a Karoo-paired ANT+ light.
-     *
-     * @param deviceId Device UID, e.g. "28691-35-5"
-     * @param modeName LightMode enum name, e.g. "SLOW_FLASH"
-     */
     fun setLightMode(deviceId: String, modeName: String): Boolean {
         val binder = lightCmdBinder ?: run {
             Timber.w("$TAG: LightCommand binder not available")
@@ -175,9 +182,7 @@ class KarooLightControl(private val context: Context) : LightController {
         val reply = Parcel.obtain()
         try {
             data.writeInterfaceToken(LIGHT_CMD_DESCRIPTOR)
-            // Param 1: id (String)
             data.writeString(deviceId)
-            // Param 2: Device (Parcelable)
             val device = deviceCreator?.invoke(deviceId)
             if (device != null) {
                 data.writeInt(1)
@@ -185,7 +190,6 @@ class KarooLightControl(private val context: Context) : LightController {
             } else {
                 data.writeInt(0)
             }
-            // Param 3: Bundle with LightMode
             val bundle = Bundle()
             bundle.classLoader = lightMode.javaClass.classLoader
             bundle.putParcelable("value", lightMode)
@@ -207,6 +211,99 @@ class KarooLightControl(private val context: Context) : LightController {
 
     override fun setMode(deviceId: String, modeName: String) {
         setLightMode(deviceId, modeName)
+    }
+
+    fun registerConnectionState(deviceId: String) {
+        val binder = sensorBinder
+        val creator = deviceCreator
+        if (binder == null || creator == null) {
+            pendingRegistrations.add(deviceId)
+            return
+        }
+        val device = creator(deviceId)
+        val listenerId = "light-conn-$deviceId"
+        if (listenerId in registeredListeners) return
+
+        val iface = IInterface { null }
+        val listenerBinder = object : Binder() {
+            init { attachInterface(iface, LISTENER_DESCRIPTOR) }
+            override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+                if (code in 1..16777215) data.enforceInterface(LISTENER_DESCRIPTOR)
+                when (code) {
+                    1 -> {
+                        data.readString() // transactionId
+                        data.readString() // className
+                        val bytes = data.createByteArray()
+                        data.readInt() // done
+                        if (bytes != null && bytes.size >= 4) {
+                            val parcel = Parcel.obtain()
+                            try {
+                                parcel.unmarshall(bytes, 0, bytes.size)
+                                parcel.setDataPosition(0)
+                                val stateOrdinal = parcel.readInt()
+                                val stateName = when (stateOrdinal) {
+                                    0 -> "CONNECTED"
+                                    1 -> "SEARCHING"
+                                    2 -> "DISABLED"
+                                    3 -> "DISCONNECTED"
+                                    4 -> "NOT_AVAILABLE"
+                                    else -> "UNKNOWN"
+                                }
+                                Timber.d("$TAG: Connection state $deviceId: $stateName")
+                                _connectionStates.value = _connectionStates.value + (deviceId to stateName)
+                            } finally {
+                                parcel.recycle()
+                            }
+                        }
+                        reply?.writeNoException()
+                    }
+                    2 -> reply?.writeNoException()
+                    3 -> reply?.writeNoException()
+                    else -> return super.onTransact(code, data, reply, flags)
+                }
+                return true
+            }
+        }
+
+        val callData = Parcel.obtain()
+        val callReply = Parcel.obtain()
+        try {
+            callData.writeInterfaceToken(SENSOR_DESCRIPTOR)
+            callData.writeString(listenerId)
+            callData.writeInt(1)
+            device.writeToParcel(callData, 0)
+            callData.writeStrongBinder(listenerBinder)
+            binder.transact(6, callData, callReply, 0)
+            callReply.readException()
+            registeredListeners.add(listenerId)
+            Timber.d("$TAG: Registered connection state listener for $deviceId")
+        } catch (e: Exception) {
+            Timber.e(e, "$TAG: Failed to register connection state for $deviceId")
+        } finally {
+            callData.recycle()
+            callReply.recycle()
+        }
+    }
+
+    fun unregisterConnectionState(deviceId: String) {
+        val binder = sensorBinder ?: return
+        val listenerId = if (deviceId.startsWith("light-conn-")) deviceId else "light-conn-$deviceId"
+        if (listenerId !in registeredListeners) return
+
+        val data = Parcel.obtain()
+        val reply = Parcel.obtain()
+        try {
+            data.writeInterfaceToken(SENSOR_DESCRIPTOR)
+            data.writeString(listenerId)
+            binder.transact(7, data, reply, 0)
+            reply.readException()
+            registeredListeners.remove(listenerId)
+        } catch (e: Exception) {
+            Timber.e(e, "$TAG: Failed to unregister connection state for $listenerId")
+        } finally {
+            data.recycle()
+            reply.recycle()
+        }
     }
 
     fun isConnected(): Boolean = lightCmdBinder != null
