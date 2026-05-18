@@ -30,6 +30,7 @@ data class LightAssignment(
     val protocol: LightProtocol = LightProtocol.ANT_PLUS,
     val dayMode: String = "OFF",
     val nightMode: String = "OFF",
+    val radarWarnFlash: Boolean = false,
 ) {
     fun modeForZone(zone: DayTimeZone): String = when (zone) {
         DayTimeZone.DAY -> dayMode

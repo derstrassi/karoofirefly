@@ -7,6 +7,9 @@ import io.hammerhead.karooext.models.PlayBeepPattern
 import io.hammerhead.karooext.models.OnLocationChanged
 import io.hammerhead.karooext.models.ReleaseBluetooth
 import io.hammerhead.karooext.models.RequestBluetooth
+import io.hammerhead.karooext.models.DataType
+import io.hammerhead.karooext.models.OnStreamState
+import io.hammerhead.karooext.models.StreamState
 import io.hammerhead.karooext.models.RideState
 import io.hammerhead.karooext.models.SavedDevices
 import io.github.derstrassi.karoofirefly.ble.MagicshineBleController
@@ -72,6 +75,8 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
     val discoveredLights: StateFlow<List<DiscoveredLight>> = _discoveredLights
 
     private var savedDevicesConsumerId: String? = null
+    private var radarConsumerId: String? = null
+    @Volatile private var radarThreatActive = false
     private var bleStartJob: kotlinx.coroutines.Job? = null
     private var discoveryPollingJob: kotlinx.coroutines.Job? = null
     @Volatile private var settingsUiActive = false
@@ -106,6 +111,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                 val modeName = if (zone == null) "OFF" else assignment.modeForZone(zone)
                 lightControllers[assignment.protocol]?.setMode(assignment.deviceId, modeName)
             }
+            updateRadarMonitoring()
         }
 
         engine.onZoneChange = { oldZone, newZone, reason ->
@@ -162,11 +168,13 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                 rideActive = true
                 engine.onRideStart()
                 startDiscoveryPolling()
+                updateRadarMonitoring()
             }
             is RideState.Paused -> engine.onRidePause()
             is RideState.Idle -> {
                 rideActive = false
                 stopDiscoveryPolling()
+                stopRadarMonitoring()
                 engine.onRideStop()
             }
         }
@@ -198,8 +206,9 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
 
     fun testMode(deviceId: String, modeName: String) {
         val assignment = engine.settings.lightAssignments.find { it.deviceId == deviceId } ?: return
+        val effectiveMode = modeName
         extensionScope.launch {
-            lightControllers[assignment.protocol]?.setMode(deviceId, modeName)
+            lightControllers[assignment.protocol]?.setMode(deviceId, effectiveMode)
             kotlinx.coroutines.delay(3000)
             lightControllers[assignment.protocol]?.setMode(deviceId, "OFF")
         }
@@ -212,6 +221,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
             magicshineController.connect(id)
         }
         startBleIfNeeded()
+        updateRadarMonitoring()
     }
 
     fun setSettingsUiActive(active: Boolean) {
@@ -389,9 +399,54 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         )
     }
 
+    private fun updateRadarMonitoring() {
+        val needsRadar = engine.settings.lightAssignments.any { it.radarWarnFlash }
+        if (needsRadar) startRadarMonitoring() else stopRadarMonitoring()
+    }
+
+    private fun startRadarMonitoring() {
+        if (radarConsumerId != null) return
+        Timber.d("$TAG: Starting radar monitoring")
+        radarConsumerId = karooSystem.addConsumer(
+            OnStreamState.StartStreaming(DataType.Type.RADAR),
+        ) { event: OnStreamState ->
+            if (event.state is StreamState.Streaming) {
+                val values = (event.state as StreamState.Streaming).dataPoint.values
+                val threat = values[DataType.Field.RADAR_THREAT_LEVEL]?.toInt() ?: 0
+                onRadarThreat(threat > 0)
+            }
+        }
+    }
+
+    private fun stopRadarMonitoring() {
+        radarConsumerId?.let {
+            Timber.d("$TAG: Stopping radar monitoring")
+            karooSystem.removeConsumer(it)
+        }
+        radarConsumerId = null
+        radarThreatActive = false
+    }
+
+    private fun onRadarThreat(threatDetected: Boolean) {
+        if (threatDetected == radarThreatActive) return
+        radarThreatActive = threatDetected
+        Timber.d("$TAG: Radar threat=${if (threatDetected) "DETECTED" else "CLEAR"}")
+
+        for (assignment in engine.settings.lightAssignments) {
+            if (!assignment.radarWarnFlash) continue
+            val zone = engine.activeZone.value
+            val currentMode = if (zone == null) "OFF" else assignment.modeForZone(zone)
+            if (currentMode != "OFF") continue
+
+            val modeName = if (threatDetected) "FAST_FLASH" else "OFF"
+            lightControllers[assignment.protocol]?.setMode(assignment.deviceId, modeName)
+        }
+    }
+
     override fun onDestroy() {
         Timber.d("$TAG: Extension onDestroy")
         instance = null
+        stopRadarMonitoring()
         engine.destroy()
         magicshineController.destroy()
         lightControl.unbind()

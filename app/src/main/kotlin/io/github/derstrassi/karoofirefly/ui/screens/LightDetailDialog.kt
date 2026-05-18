@@ -1,38 +1,34 @@
 package io.github.derstrassi.karoofirefly.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.ui.Alignment
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.derstrassi.karoofirefly.DiscoveredLight
@@ -42,7 +38,6 @@ import io.github.derstrassi.karoofirefly.data.LightProtocol
 import io.github.derstrassi.karoofirefly.data.LightRole
 import io.github.derstrassi.karoofirefly.data.modeProviderFor
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LightDetailDialog(
     light: DiscoveredLight,
@@ -56,6 +51,7 @@ fun LightDetailDialog(
     var role by remember(assignment) { mutableStateOf(assignment?.role) }
     var dayMode by remember(assignment) { mutableStateOf(assignment?.dayMode ?: "OFF") }
     var nightMode by remember(assignment) { mutableStateOf(assignment?.nightMode ?: "OFF") }
+    var radarWarnFlash by remember(assignment) { mutableStateOf(assignment?.radarWarnFlash ?: false) }
 
     fun save() {
         if (role != null) {
@@ -67,6 +63,7 @@ fun LightDetailDialog(
                     protocol = light.protocol,
                     dayMode = dayMode,
                     nightMode = nightMode,
+                    radarWarnFlash = radarWarnFlash,
                 ),
             )
         } else {
@@ -119,7 +116,6 @@ fun LightDetailDialog(
         title = { Text(light.name, style = MaterialTheme.typography.titleMedium) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                // Status info
                 val statusParts = listOfNotNull(
                     light.manufacturer,
                     protocolLabel,
@@ -135,7 +131,6 @@ fun LightDetailDialog(
                 light.batteryPercent?.let { telemetryParts.add("Battery: $it%") }
                 light.temperature?.let { telemetryParts.add("Temp: ${it}°C") }
                 if (telemetryParts.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         telemetryParts.joinToString("  "),
                         style = MaterialTheme.typography.bodySmall,
@@ -143,12 +138,9 @@ fun LightDetailDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider()
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Role selector
-                OptionDropdown(
+                InlineDropdown(
                     label = "Role",
                     selectedId = role?.name ?: "None",
                     options = listOf("FRONT" to "Front", "REAR" to "Rear", "None" to "None"),
@@ -168,8 +160,9 @@ fun LightDetailDialog(
                 )
 
                 if (role != null) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    LightModeWithTest(
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    ModeRow(
                         label = "Day",
                         selectedMode = dayMode,
                         modes = modes,
@@ -179,7 +172,7 @@ fun LightDetailDialog(
                         } else null,
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    LightModeWithTest(
+                    ModeRow(
                         label = "Night",
                         selectedMode = nightMode,
                         modes = modes,
@@ -188,6 +181,28 @@ fun LightDetailDialog(
                             { onTestMode(light.id, nightMode) }
                         } else null,
                     )
+
+                    if (role == LightRole.REAR) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Radar Warn Flash")
+                                Text(
+                                    "Flash when vehicle detected",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Switch(
+                                checked = radarWarnFlash,
+                                onCheckedChange = { radarWarnFlash = it; save() },
+                            )
+                        }
+                    }
                 }
             }
         },
@@ -195,15 +210,18 @@ fun LightDetailDialog(
 }
 
 @Composable
-private fun LightModeWithTest(
+private fun ModeRow(
     label: String,
     selectedMode: String,
     modes: List<LightModeOption>,
     onSelected: (String) -> Unit,
     onTest: (() -> Unit)?,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        OptionDropdown(
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        InlineDropdown(
             label = label,
             selectedId = selectedMode,
             options = modes.map { it.id to it.displayName },
@@ -211,7 +229,7 @@ private fun LightModeWithTest(
             modifier = Modifier.weight(1f),
         )
         if (onTest != null) {
-            IconButton(onClick = onTest, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = onTest, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.Default.PlayArrow,
                     contentDescription = "Test $label",
@@ -223,9 +241,8 @@ private fun LightModeWithTest(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun OptionDropdown(
+private fun InlineDropdown(
     label: String,
     selectedId: String,
     options: List<Pair<String, String>>,
@@ -235,19 +252,23 @@ private fun OptionDropdown(
     var expanded by remember { mutableStateOf(false) }
     val displayName = options.find { it.first == selectedId }?.second ?: selectedId
 
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-        modifier = modifier,
+    Row(
+        modifier = modifier
+            .clickable { expanded = true }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        TextField(
-            value = "$label: $displayName",
-            onValueChange = {},
-            readOnly = true,
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+        Text(
+            "$label: ",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        ExposedDropdownMenu(
+        Text(
+            displayName,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {

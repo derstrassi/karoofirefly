@@ -36,6 +36,7 @@ Controls ANT+ and Bluetooth bike lights from your Karoo. Unlike Karoo's built-in
 - Two zones: Day and Night with clear "Day starts at" / "Night starts at" times
 - Zone change notifications with sound during rides (configurable)
 - Auto on/off with ride start/stop, optional auto-off on pause
+- **Radar Warn Flash** — per-light option for rear lights: automatically flashes when radar detects approaching vehicle (for lights like Garmin Varia that don't flash autonomously when set to Off)
 - Battery level and temperature readout for Magicshine BLE lights
 - Test buttons to preview light modes from settings
 - BonusActions mappable to AXS shift buttons or Karoo hardware buttons:
@@ -70,6 +71,7 @@ Each light has its own configuration dialog with:
 - Role assignment (Front / Rear)
 - Day and Night mode selection with protocol-specific modes
 - Test buttons to preview each mode for 3 seconds
+- Radar Warn Flash toggle (rear lights only) — flashes when radar detects a vehicle while light is off
 - Battery level and temperature (BLE lights)
 - Delete option to remove configuration
 
