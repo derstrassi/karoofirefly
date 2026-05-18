@@ -13,8 +13,8 @@ android {
         applicationId = "io.github.derstrassi.karoofirefly"
         minSdk = 23
         targetSdk = 34
-        versionCode = 7
-        versionName = "0.5-beta-1"
+        versionCode = 8
+        versionName = "0.5-beta-2"
     }
 
     signingConfigs {

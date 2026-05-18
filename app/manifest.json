@@ -2,9 +2,9 @@
   "label": "KarooFireFly",
   "packageName": "io.github.derstrassi.karoofirefly",
   "iconUrl": "https://raw.githubusercontent.com/derstrassi/karoofirefly/main/docs/ic_firefly.svg",
-  "latestApkUrl": "https://github.com/derstrassi/karoofirefly/releases/latest/download/karoo-light-controller-0.5-beta-1.apk",
-  "latestVersion": "0.5-beta-1",
-  "latestVersionCode": 7,
+  "latestApkUrl": "https://github.com/derstrassi/karoofirefly/releases/latest/download/karoo-light-controller-0.5-beta-2.apk",
+  "latestVersion": "0.5-beta-2",
+  "latestVersionCode": 8,
   "developer": "Dennis Straßer",
   "description": "Automatic smart bike light control based on time of day and ambient light. Supports ANT+ lights (via Karoo pairing) and Magicshine BLE lights (via Bluetooth). Per-light configuration with protocol-specific modes, time-based and ambient light sensor automation, zone change notifications, and manual override via BonusActions.\n\n![Connected Lights](https://raw.githubusercontent.com/derstrassi/karoofirefly/main/docs/settings_lights.png)\n![Light Detail](https://raw.githubusercontent.com/derstrassi/karoofirefly/main/docs/settings_dialog.png)\n![Time-based](https://raw.githubusercontent.com/derstrassi/karoofirefly/main/docs/settings_timebased.png)",
   "releaseNotes": "* Magicshine BLE light support (Hori 1300, EVO 1700)\n* Per-light profiles with protocol-specific modes\n* Tap-to-configure light detail dialog with test buttons\n* Battery and temperature readout for BLE lights\n* Live ANT+ connection status\n* Auto-off on pause option\n* Zone change notifications with per-light mode details\n* Protocol badges (ANT+/BLE) and connection status indicators\n* Delete light configuration with confirmation"
