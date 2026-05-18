@@ -12,6 +12,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -67,22 +68,28 @@ class MagicshineBleController(context: Context) : LightController {
         Timber.d("$TAG: Starting BLE discovery")
         scanJob = scope.launch {
             try {
-                centralManager.scan { }.collect { result ->
-                    val name = result.advertisingData.name ?: return@collect
-                    val address = result.peripheral.address
-                    if (MagicshineProtocol.SUPPORTED_NAME_PREFIXES.any { name.startsWith(it, ignoreCase = true) }) {
-                        if (!devices.containsKey(address)) {
-                            Timber.d("$TAG: Found Magicshine: $name ($address)")
-                            devices[address] = BleDevice(result.peripheral, name)
-                            deviceConfigs[address] = MagicshineDeviceConfig.forDevice(name)
-                            Timber.d("$TAG: Device config for $name: module=${deviceConfigs[address]!!.moduleType}")
-                            updateDiscoveredLights()
-                            if (address in assignedDeviceIds) {
-                                connectToPeripheral(address, result.peripheral)
+                centralManager.scan { }
+                    .catch { e -> Timber.e(e, "$TAG: BLE scan flow error") }
+                    .collect { result ->
+                        try {
+                            val name = result.advertisingData.name ?: return@collect
+                            val address = result.peripheral.address
+                            if (MagicshineProtocol.SUPPORTED_NAME_PREFIXES.any { name.startsWith(it, ignoreCase = true) }) {
+                                if (!devices.containsKey(address)) {
+                                    Timber.d("$TAG: Found Magicshine: $name ($address)")
+                                    devices[address] = BleDevice(result.peripheral, name)
+                                    deviceConfigs[address] = MagicshineDeviceConfig.forDevice(name)
+                                    Timber.d("$TAG: Device config for $name: module=${deviceConfigs[address]!!.moduleType}")
+                                    updateDiscoveredLights()
+                                    if (address in assignedDeviceIds) {
+                                        connectToPeripheral(address, result.peripheral)
+                                    }
+                                }
                             }
+                        } catch (e: Exception) {
+                            Timber.w(e, "$TAG: Skipping malformed scan result")
                         }
                     }
-                }
             } catch (e: Exception) {
                 Timber.e(e, "$TAG: BLE scan error")
             }
