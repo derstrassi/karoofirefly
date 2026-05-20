@@ -49,11 +49,27 @@ interface LightModeProvider {
 
 object AntPlusModeProvider : LightModeProvider {
     override fun availableModes(): List<LightModeOption> =
-        LightMode.CYCLING_MODES.map { LightModeOption(it.karooName, it.displayName) }
+        LightMode.FALLBACK_MODES.map { LightModeOption(it.karooName, it.displayName) }
+}
+
+class DynamicAntPlusModeProvider(private val karooNames: Set<String>) : LightModeProvider {
+    override fun availableModes(): List<LightModeOption> {
+        val modes = karooNames.mapNotNull { name ->
+            val mode = LightMode.fromKarooName(name)
+            if (mode != null) LightModeOption(mode.karooName, mode.displayName) else null
+        }.sortedBy { LightMode.fromKarooName(it.id)?.modeNumber ?: Int.MAX_VALUE }
+        return if (modes.any { it.id == "OFF" }) modes else listOf(LightModeOption("OFF", "Off")) + modes
+    }
 }
 
 fun modeProviderFor(protocol: LightProtocol, deviceId: String? = null): LightModeProvider = when (protocol) {
-    LightProtocol.ANT_PLUS -> AntPlusModeProvider
+    LightProtocol.ANT_PLUS -> {
+        val supported = deviceId?.let {
+            io.github.derstrassi.karoofirefly.KarooLightControllerExtension.getInstance()
+                ?.lightControl?.supportedModes?.value?.get(it)
+        }
+        if (supported != null) DynamicAntPlusModeProvider(supported) else AntPlusModeProvider
+    }
     LightProtocol.BLE -> {
         val config = deviceId?.let {
             io.github.derstrassi.karoofirefly.KarooLightControllerExtension.getInstance()

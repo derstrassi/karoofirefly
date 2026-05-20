@@ -22,10 +22,12 @@ class KarooLightControl(private val context: Context) : LightController {
         private const val SENSOR_DESCRIPTOR = "io.hammerhead.sensorservice.SensorServiceAIDL"
         private const val LIGHT_CMD_DESCRIPTOR = "io.hammerhead.sensorservice.LightCommandConnectionAIDL"
         private const val LISTENER_DESCRIPTOR = "io.hammerhead.aidlrx.IParcelableListener"
-        private const val TX_GET_LIGHT_CMD = 17
+        private const val TX_REGISTER_LIGHT_PARAMS = 1
+        private const val TX_UNREGISTER_LIGHT_PARAMS = 2
         private const val TX_SET_LIGHT_MODE = 3
-        private const val TX_REGISTER_DEVICE_CONNECTION = 10
-        private const val TX_UNREGISTER_DEVICE_CONNECTION = 11
+        private const val TX_REGISTER_DEVICE_CONNECTION = 6
+        private const val TX_UNREGISTER_DEVICE_CONNECTION = 7
+        private const val TX_GET_LIGHT_CMD = 17
     }
 
     private var sensorBinder: IBinder? = null
@@ -36,8 +38,12 @@ class KarooLightControl(private val context: Context) : LightController {
 
     private val _connectionStates = MutableStateFlow<Map<String, String>>(emptyMap())
     val connectionStates: StateFlow<Map<String, String>> = _connectionStates
+    private val _supportedModes = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
+    val supportedModes: StateFlow<Map<String, Set<String>>> = _supportedModes
+    private var lightModeEnumClass: Class<out Enum<*>>? = null
     private val registeredListeners = mutableSetOf<String>()
     private val pendingRegistrations = mutableSetOf<String>()
+    private val pendingLightParamRegistrations = mutableSetOf<String>()
     var onServiceReady: (() -> Unit)? = null
 
     private val serviceConnection = object : ServiceConnection {
@@ -90,6 +96,7 @@ class KarooLightControl(private val context: Context) : LightController {
             val enumClass = cls as Class<out Enum<*>>
             val enumConstants = enumClass.enumConstants
             Timber.i("$TAG: Karoo LightMode enum values (${enumConstants?.size}): ${enumConstants?.joinToString { it.name }}")
+            lightModeEnumClass = enumClass
             lightModeParcelableCreator = { modeName ->
                 java.lang.Enum.valueOf(enumClass, modeName) as Parcelable
             }
@@ -130,6 +137,8 @@ class KarooLightControl(private val context: Context) : LightController {
 
             pendingRegistrations.toList().forEach { registerConnectionState(it) }
             pendingRegistrations.clear()
+            pendingLightParamRegistrations.toList().forEach { registerForLightParameters(it) }
+            pendingLightParamRegistrations.clear()
             onServiceReady?.invoke()
         } catch (e: Exception) {
             Timber.e(e, "$TAG: Failed to load LightMode class")
@@ -211,6 +220,101 @@ class KarooLightControl(private val context: Context) : LightController {
 
     override fun setMode(deviceId: String, modeName: String) {
         setLightMode(deviceId, modeName)
+    }
+
+    fun registerForLightParameters(deviceId: String) {
+        val binder = lightCmdBinder
+        val creator = deviceCreator
+        if (binder == null || creator == null) {
+            pendingLightParamRegistrations.add(deviceId)
+            return
+        }
+        val device = creator(deviceId)
+        val listenerId = "light-params-$deviceId"
+        if (listenerId in registeredListeners) return
+
+        val enumClass = lightModeEnumClass
+
+        val iface = IInterface { null }
+        val listenerBinder = object : Binder() {
+            init { attachInterface(iface, LISTENER_DESCRIPTOR) }
+            override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+                if (code in 1..16777215) data.enforceInterface(LISTENER_DESCRIPTOR)
+                when (code) {
+                    1 -> {
+                        data.readString()
+                        data.readString()
+                        val bytes = data.createByteArray()
+                        data.readInt()
+                        if (bytes != null && enumClass != null) {
+                            parseLightParameters(deviceId, bytes, enumClass)
+                        }
+                        reply?.writeNoException()
+                    }
+                    2 -> reply?.writeNoException()
+                    3 -> reply?.writeNoException()
+                    else -> return super.onTransact(code, data, reply, flags)
+                }
+                return true
+            }
+        }
+
+        val callData = Parcel.obtain()
+        val callReply = Parcel.obtain()
+        try {
+            callData.writeInterfaceToken(LIGHT_CMD_DESCRIPTOR)
+            callData.writeString(deviceId)
+            callData.writeInt(1)
+            device.writeToParcel(callData, 0)
+            callData.writeStrongBinder(listenerBinder)
+            binder.transact(TX_REGISTER_LIGHT_PARAMS, callData, callReply, 0)
+            callReply.readException()
+            registeredListeners.add(listenerId)
+            Timber.d("$TAG: Registered light parameters listener for $deviceId")
+        } catch (e: Exception) {
+            Timber.e(e, "$TAG: Failed to register light parameters for $deviceId")
+        } finally {
+            callData.recycle()
+            callReply.recycle()
+        }
+    }
+
+    private fun parseLightParameters(deviceId: String, bytes: ByteArray, enumClass: Class<out Enum<*>>) {
+        try {
+            val parcel = Parcel.obtain()
+            try {
+                parcel.unmarshall(bytes, 0, bytes.size)
+                parcel.setDataPosition(0)
+
+                // LightParameters parcel layout:
+                // 1. mode: LightMode written as name string
+                // 2. location: written as name string
+                // 3. supportedModes: size int + each mode as name string
+                val modeName = parcel.readString()
+                val locationName = parcel.readString()
+                val modesCount = parcel.readInt()
+                val modes = mutableSetOf<String>()
+                for (i in 0 until modesCount) {
+                    val name = parcel.readString()
+                    if (name != null && name != "UNKNOWN") {
+                        modes.add(name)
+                    }
+                }
+
+                if (modes.isNotEmpty()) {
+                    modes.add("OFF")
+                    val existing = _supportedModes.value[deviceId]
+                    if (existing != modes) {
+                        Timber.d("$TAG: LightParameters for $deviceId: mode=$modeName, location=$locationName, supportedModes=$modes")
+                        _supportedModes.value = _supportedModes.value + (deviceId to modes)
+                    }
+                }
+            } finally {
+                parcel.recycle()
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "$TAG: Failed to parse LightParameters for $deviceId")
+        }
     }
 
     fun registerConnectionState(deviceId: String) {

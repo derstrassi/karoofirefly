@@ -30,13 +30,6 @@ class PreferencesRepository(private val context: Context) {
         }
     }
 
-    suspend fun updateProfile(profile: LightProfile) {
-        context.dataStore.edit { preferences ->
-            val current = getCurrentSettings(preferences)
-            preferences[SETTINGS_KEY] = json.encodeToString(current.copy(profile = profile))
-        }
-    }
-
     private fun getCurrentSettings(preferences: Preferences): LightControllerSettings {
         val settingsJson = preferences[SETTINGS_KEY]
         return if (settingsJson != null) {

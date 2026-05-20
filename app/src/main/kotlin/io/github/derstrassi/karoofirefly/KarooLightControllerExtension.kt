@@ -316,6 +316,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
 
                 for (device in antDeviceCache) {
                     lightControl.registerConnectionState(device.id)
+                    lightControl.registerForLightParameters(device.id)
                 }
             }
         }
