@@ -75,7 +75,7 @@ Each light has its own configuration dialog with:
 - Battery level and temperature (BLE lights)
 - Delete option to remove configuration
 
-**ANT+ modes:** Off, Steady High, Steady Low, Slow Flash, Fast Flash
+**ANT+ modes:** Queried dynamically from each light — only supported modes are shown (e.g. Garmin Varia: Off, Solid, Night Flash, Day Flash; Bontrager Ion: Off, High, Medium, Low, etc.)
 
 **Magicshine modes:** Off, Steady/Flash/SOS at 10%, 25%, 50%, 100%
 
@@ -107,7 +107,7 @@ When using an auto mode, BonusButton presses temporarily override the automatic 
 
 ### Layers
 
-1. **Karoo Integration** (`karoo/`) — SensorService AIDL binding, ANT+ light mode commands
+1. **Karoo Integration** (`karoo/`) — SensorService AIDL binding, ANT+ light mode commands, per-device capability queries
 2. **BLE** (`ble/`) — Magicshine BLE scanning, connection, protocol implementation
 3. **Light** (`light/`) — `LightController` interface abstracting ANT+ and BLE
 4. **Engine** (`engine/`) — State machine, sunrise/sunset calculation, ambient light sensor
@@ -187,6 +187,6 @@ This extension controls ANT+ lights through Karoo's **internal SensorService AID
 
 **Why:** Karoo blocks `setRfFrequency()` for third-party apps, making it impossible to open ANT+ channels directly. The only way to control ANT+ lights is through Karoo's own SensorService, which already has an active ANT+ connection to paired lights.
 
-**How it works:** The extension binds to the SensorService, retrieves the `LightCommandConnection` sub-binder via AIDL transaction 17, then calls `setLightMode` (transaction 3) with a `LightMode` Parcelable loaded via reflection from the SensorService's classloader.
+**How it works:** The extension binds to the SensorService, retrieves the `LightCommandConnection` sub-binder via AIDL transaction 17, then uses three transactions on it: `registerForLightParameters` (TX 1) to query per-device supported modes, `setLightMode` (TX 3) to control lights, and connection state monitoring via SensorService TX 6. All Parcelables are loaded via reflection from the SensorService's classloader.
 
 **Risk:** Karoo firmware updates may change AIDL transaction codes, parameter formats, or class internals. If the extension stops working after a firmware update, the `KarooLightControl.kt` file is the place to investigate.
