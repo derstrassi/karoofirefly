@@ -158,13 +158,22 @@ class MagicshineBleController(context: Context) : LightController {
                     }
 
                     delay(180)
-                    // Query battery and device info
                     writeBytes(address, MagicshineProtocol.buildQuery(0xA4.toByte()))
                     delay(100)
                     writeBytes(address, MagicshineProtocol.buildQuery(0xA1.toByte()))
 
                     updateDiscoveredLights()
                     onDeviceConnected?.invoke()
+
+                    scope.launch {
+                        while (characteristics.containsKey(address)) {
+                            delay(60_000)
+                            if (!characteristics.containsKey(address)) break
+                            writeBytes(address, MagicshineProtocol.buildQuery(0xA4.toByte()))
+                            delay(100)
+                            writeBytes(address, MagicshineProtocol.buildQuery(0xA1.toByte()))
+                        }
+                    }
                 } else {
                     Timber.w("$TAG: Characteristic not found for $address")
                 }
