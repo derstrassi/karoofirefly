@@ -33,6 +33,7 @@
         <service
             android:name=".KarooLightControllerExtension"
             android:exported="true"
+            android:foregroundServiceType="connectedDevice"
             tools:ignore="ExportedService">
             <intent-filter>
                 <action android:name="io.hammerhead.karooext.KAROO_EXTENSION" />

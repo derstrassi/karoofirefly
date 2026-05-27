@@ -177,6 +177,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 ## Important Notes
 
 - Extension ID: `karoo-light-controller` (no `.` allowed in karoo-ext IDs)
+- **Disable "Auto Control"** for your ANT+ lights in Karoo's sensor settings (Settings > Sensors > [Light] > Auto Control: Off). Otherwise Karoo's native light control will conflict with KarooFireFly.
 - Pair ANT+ lights through **Karoo's native sensor settings**, not through the extension
 - Magicshine BLE lights are discovered automatically when settings are open or a BLE light is configured
 - BLE connection requires Bluetooth permissions (granted on first launch)
