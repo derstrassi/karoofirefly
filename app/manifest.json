@@ -2,7 +2,7 @@
   "label": "KarooFireFly",
   "packageName": "io.github.derstrassi.karoofirefly",
   "iconUrl": "https://raw.githubusercontent.com/derstrassi/karoofirefly/main/docs/ic_firefly.svg",
-  "latestApkUrl": "https://github.com/derstrassi/karoofirefly/releases/latest/download/karoo-light-controller-0.5-beta-5.apk",
+  "latestApkUrl": "https://github.com/derstrassi/karoofirefly/releases/download/v0.5-beta-5/karoo-light-controller-0.5-beta-5.apk",
   "latestVersion": "0.5-beta-5",
   "latestVersionCode": 11,
   "developer": "Dennis Straßer",
