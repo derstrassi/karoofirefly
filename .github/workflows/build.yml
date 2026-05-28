@@ -53,6 +53,22 @@ jobs:
           name: karoo-light-controller
           path: ${{ env.APK_NAME }}
 
+      - name: Update manifest.json with release URL
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          TAG="${GITHUB_REF_NAME}"
+          REPO="${GITHUB_REPOSITORY}"
+          APK_URL="https://github.com/${REPO}/releases/download/${TAG}/karoo-light-controller-${VERSION}.apk"
+          cd app
+          jq --arg url "$APK_URL" --arg ver "$VERSION" \
+            '.latestApkUrl = $url | .latestVersion = $ver' manifest.json > manifest.tmp && mv manifest.tmp manifest.json
+          cd ..
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app/manifest.json
+          git diff --cached --quiet || git commit -m "Update manifest for ${TAG}" && git push origin HEAD:main
+
       - name: Create GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
