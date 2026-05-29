@@ -124,6 +124,17 @@ When using an auto mode, BonusButton presses temporarily override the automatic 
    - *Combined:* time-based baseline, sensor can darken but not brighten (e.g. tunnel → NIGHT)
 3. **Ride State** — Lights off when ride ends (optionally on pause)
 
+## Roadmap
+
+### v0.6 — Notification Settings
+- **Battery Low Alert** — in-ride notification when a light's battery drops below a configurable threshold
+- **Connection Lost Alert** — notification when a configured light loses connection during a ride
+
+### v0.7 — Data Fields
+- **Light Battery Status** — Karoo data field showing battery levels of all configured lights
+- **Mode Switch** — interactive data field to switch light modes directly from the ride screen
+- **Current Zone** — data field showing the active light zone (Day / Night / Off)
+
 ## Development Setup
 
 ### 1. JDK 17
