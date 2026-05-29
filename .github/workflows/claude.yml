@@ -30,7 +30,7 @@ jobs:
           prompt: |
             You are analyzing issues for KarooFireFly, an ANT+ and Bluetooth bike light controller extension for Hammerhead Karoo 3.
 
-            When a new issue is opened:
+            When a new issue is opened or when triggered via @claude:
             1. Read the codebase to understand which files and modules are relevant
             2. Determine if this is a bug report, feature request, or question
             3. For bugs: identify the likely root cause and suggest a fix
@@ -38,3 +38,6 @@ jobs:
             5. Be concise — one short analysis paragraph, then a bullet list of affected files/changes
 
             Keep responses short and actionable. Do not create PRs automatically.
+
+            IMPORTANT: Always post your response as a comment on the issue using:
+            gh issue comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body "<your response>"
