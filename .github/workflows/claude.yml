@@ -1,0 +1,38 @@
+name: Claude Issue Analysis
+
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+
+jobs:
+  claude:
+    if: >
+      (github.event_name == 'issues' && github.event.action == 'opened') ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          trigger_phrase: "@claude"
+          max_turns: 10
+          prompt: |
+            You are analyzing issues for KarooFireFly, an ANT+ and Bluetooth bike light controller extension for Hammerhead Karoo 3.
+
+            When a new issue is opened:
+            1. Read the codebase to understand which files and modules are relevant
+            2. Determine if this is a bug report, feature request, or question
+            3. For bugs: identify the likely root cause and suggest a fix
+            4. For features: outline what needs to change and which files are affected
+            5. Be concise — one short analysis paragraph, then a bullet list of affected files/changes
+
+            Keep responses short and actionable. Do not create PRs automatically.
