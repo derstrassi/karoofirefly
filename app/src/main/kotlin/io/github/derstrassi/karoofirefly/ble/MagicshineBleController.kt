@@ -59,7 +59,7 @@ class MagicshineBleController(context: Context) : LightController {
     var onDeviceConnected: (() -> Unit)? = null
 
     private var scanJob: Job? = null
-    private val connectionJobs = mutableMapOf<String, Job>()
+    private val connectionJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
 
     var assignedDeviceIds: Set<String> = emptySet()
 
@@ -79,7 +79,7 @@ class MagicshineBleController(context: Context) : LightController {
                                     Timber.d("$TAG: Found Magicshine: $name ($address)")
                                     devices[address] = BleDevice(result.peripheral, name)
                                     deviceConfigs[address] = MagicshineDeviceConfig.forDevice(name)
-                                    Timber.d("$TAG: Device config for $name: module=${deviceConfigs[address]!!.moduleType}")
+                                    Timber.d("$TAG: Device config for $name: module=${deviceConfigs[address]?.moduleType}")
                                     updateDiscoveredLights()
                                     if (address in assignedDeviceIds) {
                                         connectToPeripheral(address, result.peripheral)

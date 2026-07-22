@@ -13,6 +13,7 @@ import android.os.Parcelable
 import io.github.derstrassi.karoofirefly.light.LightController
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import timber.log.Timber
 
 class KarooLightControl(private val context: Context) : LightController {
@@ -41,9 +42,9 @@ class KarooLightControl(private val context: Context) : LightController {
     private val _supportedModes = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
     val supportedModes: StateFlow<Map<String, Set<String>>> = _supportedModes
     private var lightModeEnumClass: Class<out Enum<*>>? = null
-    private val registeredListeners = mutableSetOf<String>()
-    private val pendingRegistrations = mutableSetOf<String>()
-    private val pendingLightParamRegistrations = mutableSetOf<String>()
+    private val registeredListeners = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val pendingRegistrations = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val pendingLightParamRegistrations = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     var onServiceReady: (() -> Unit)? = null
 
     private val serviceConnection = object : ServiceConnection {
@@ -306,7 +307,7 @@ class KarooLightControl(private val context: Context) : LightController {
                     val existing = _supportedModes.value[deviceId]
                     if (existing != modes) {
                         Timber.d("$TAG: LightParameters for $deviceId: mode=$modeName, location=$locationName, supportedModes=$modes")
-                        _supportedModes.value = _supportedModes.value + (deviceId to modes)
+                        _supportedModes.update { it + (deviceId to modes) }
                     }
                 }
             } finally {
@@ -354,7 +355,7 @@ class KarooLightControl(private val context: Context) : LightController {
                                     else -> "UNKNOWN"
                                 }
                                 Timber.d("$TAG: Connection state $deviceId: $stateName")
-                                _connectionStates.value = _connectionStates.value + (deviceId to stateName)
+                                _connectionStates.update { it + (deviceId to stateName) }
                             } finally {
                                 parcel.recycle()
                             }

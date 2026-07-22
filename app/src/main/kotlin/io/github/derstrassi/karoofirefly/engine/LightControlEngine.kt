@@ -49,7 +49,7 @@ class LightControlEngine(
     private val _activeZone = MutableStateFlow<DayTimeZone?>(null)
     val activeZone: StateFlow<DayTimeZone?> = _activeZone
 
-    var settings: LightControllerSettings = LightControllerSettings()
+    @Volatile var settings: LightControllerSettings = LightControllerSettings()
 
     fun onRideStart() {
         Timber.d("LightControlEngine: ride started")

@@ -143,10 +143,6 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         karooSystem.connect { connected ->
             Timber.d("$TAG: Karoo system connected=$connected")
             if (connected) {
-                lightControl.onServiceReady = {
-                    Timber.d("$TAG: SensorService ready, discovering ANT+ lights")
-                    discoverKarooLights()
-                }
                 lightControl.bind()
                 setupConsumers()
                 loadSettings()
@@ -240,18 +236,9 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         }
     }
 
-    private fun allAssignedLightsConnected(): Boolean {
+    private fun allAssignedBleConnected(): Boolean {
         val bleAssigned = magicshineController.assignedDeviceIds
-        val bleOk = bleAssigned.isEmpty() || magicshineController.allConnected(bleAssigned)
-
-        val antAssigned = engine.settings.lightAssignments
-            .filter { it.protocol == LightProtocol.ANT_PLUS }
-            .map { it.deviceId }
-            .toSet()
-        val connStates = lightControl.connectionStates.value
-        val antOk = antAssigned.isEmpty() || antAssigned.all { connStates[it] == "CONNECTED" }
-
-        return bleOk && antOk
+        return bleAssigned.isEmpty() || magicshineController.allConnected(bleAssigned)
     }
 
     private fun startDiscoveryPolling() {
@@ -259,7 +246,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         discoveryPollingJob = extensionScope.launch {
             while (true) {
                 discoverKarooLights()
-                if (allAssignedLightsConnected()) {
+                if (allAssignedBleConnected()) {
                     Timber.d("$TAG: All assigned lights connected, stopping discovery polling")
                     break
                 }
