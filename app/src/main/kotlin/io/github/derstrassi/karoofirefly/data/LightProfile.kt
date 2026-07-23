@@ -108,6 +108,7 @@ data class LightControllerSettings(
     val autoOnWithRide: Boolean = true,
     val autoOffWithRide: Boolean = true,
     val autoOffOnPause: Boolean = false,
+    val keepLightsOnAtNightWhilePaused: Boolean = true,
     val profile: LightProfile = LightProfile(),
     val lightControlMode: String = "MANUAL_ONLY",
     val ambientNightThreshold: Int = 50,

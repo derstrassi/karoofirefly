@@ -75,6 +75,7 @@ fun SettingsScreen(
     var autoOn by remember(settings) { mutableStateOf(settings.autoOnWithRide) }
     var autoOff by remember(settings) { mutableStateOf(settings.autoOffWithRide) }
     var autoOffPause by remember(settings) { mutableStateOf(settings.autoOffOnPause) }
+    var keepOnAtNight by remember(settings) { mutableStateOf(settings.keepLightsOnAtNightWhilePaused) }
     var useTimeBased by remember(settings) { mutableStateOf(settings.useTimeBased) }
     var useAmbientLight by remember(settings) { mutableStateOf(settings.useAmbientLight) }
     var nightThreshold by remember(settings) { mutableIntStateOf(settings.ambientNightThreshold) }
@@ -88,6 +89,7 @@ fun SettingsScreen(
                 autoOnWithRide = autoOn,
                 autoOffWithRide = autoOff,
                 autoOffOnPause = autoOffPause,
+                keepLightsOnAtNightWhilePaused = keepOnAtNight,
                 lightControlMode = LightControlMode.fromFlags(useTimeBased, useAmbientLight).name,
                 ambientNightThreshold = nightThreshold,
                 zoneNotificationsEnabled = zoneNotifications,
@@ -308,6 +310,19 @@ fun SettingsScreen(
             ) {
                 Text("Auto-off on pause", modifier = Modifier.weight(1f))
                 Switch(checked = autoOffPause, onCheckedChange = { autoOffPause = it; saveSettings() })
+            }
+
+            if (autoOffPause) {
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Keep on at night", modifier = Modifier.weight(1f))
+                    Switch(checked = keepOnAtNight, onCheckedChange = { keepOnAtNight = it; saveSettings() })
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))

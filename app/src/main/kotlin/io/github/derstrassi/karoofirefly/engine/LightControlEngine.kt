@@ -64,10 +64,14 @@ class LightControlEngine(
     fun onRidePause() {
         Timber.d("LightControlEngine: ride paused")
         _state.value = EngineState.PAUSED
-        if (settings.autoOffOnPause) {
+        if (settings.autoOffOnPause && !keepLightsOnAtNight()) {
             applyZone(null)
         }
     }
+
+    private fun keepLightsOnAtNight(): Boolean =
+        settings.keepLightsOnAtNightWhilePaused &&
+            determineCurrentZone() == DayTimeZone.NIGHT
 
     fun onRideStop() {
         Timber.d("LightControlEngine: ride stopped")
