@@ -64,6 +64,7 @@ fun LightDetailDialog(
                     dayMode = dayMode,
                     nightMode = nightMode,
                     radarWarnFlash = radarWarnFlash,
+                    notificationsEnabled = assignment?.notificationsEnabled,
                 ),
             )
         } else {

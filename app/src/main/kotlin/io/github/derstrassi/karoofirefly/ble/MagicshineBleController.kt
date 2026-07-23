@@ -57,6 +57,7 @@ class MagicshineBleController(context: Context) : LightController {
     val discoveredLights: StateFlow<List<DiscoveredLight>> = _discoveredLights
 
     var onDeviceConnected: (() -> Unit)? = null
+    var onDeviceDisconnected: ((String) -> Unit)? = null
 
     private var scanJob: Job? = null
     private val connectionJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
@@ -182,6 +183,7 @@ class MagicshineBleController(context: Context) : LightController {
                     if (state is ConnectionState.Disconnected) {
                         Timber.d("$TAG: Disconnected from $address, will reconnect")
                         characteristics.remove(address)
+                        onDeviceDisconnected?.invoke(address)
                         delay(5000)
                         val device = devices[address]
                         if (device != null) {

@@ -51,6 +51,8 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         const val TAG = "LightController"
         private const val BIKE_LIGHT_DATA_TYPE = "TYPE_BIKE_LIGHT_ID"
         private const val DEVICE_TYPE_BIKE_LIGHT = 35
+        private const val CONNECTION_ALERT_COOLDOWN_MS = 60_000L
+        private const val BATTERY_CHECK_INTERVAL_MS = 60_000L
 
         @Volatile
         private var instance: KarooLightControllerExtension? = null
@@ -79,8 +81,13 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
     @Volatile private var radarThreatActive = false
     private var bleStartJob: kotlinx.coroutines.Job? = null
     private var discoveryPollingJob: kotlinx.coroutines.Job? = null
+    private var batteryMonitorJob: kotlinx.coroutines.Job? = null
     @Volatile private var settingsUiActive = false
     @Volatile private var rideActive = false
+
+    private val batteryAlerted = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val connectionAlertLastTime = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val antConnPrevState = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     private val extensionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -102,6 +109,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
             stopBleIfNotNeeded()
             engine.activeZone.value?.let { zone -> engine.onApplyZone?.invoke(zone) }
         }
+        magicshineController.onDeviceDisconnected = { deviceId -> maybeAlertConnectionLost(deviceId) }
         timeController = TimeBasedController()
         ambientLightSensor = AmbientLightSensor(applicationContext)
         engine = LightControlEngine(timeController, ambientLightSensor)
@@ -115,19 +123,21 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         }
 
         engine.onZoneChange = { oldZone, newZone, reason ->
-            if (engine.settings.zoneNotificationsEnabled && engine.state.value != LightControlEngine.EngineState.IDLE && engine.settings.lightAssignments.isNotEmpty()) {
-                playNotificationSound()
-                karooSystem.dispatch(
-                    InRideAlert(
-                        id = "zone-change",
-                        icon = R.drawable.ic_firefly,
-                        title = "$oldZone → $newZone ($reason)",
-                        detail = buildModeDetail(newZone),
-                        autoDismissMs = 30000,
-                        backgroundColor = android.R.color.black,
-                        textColor = android.R.color.white,
-                    ),
-                )
+            if (engine.state.value != LightControlEngine.EngineState.IDLE && engine.settings.lightAssignments.isNotEmpty()) {
+                if (engine.settings.zoneNotifySound) playNotificationSound()
+                if (engine.settings.zoneNotifyPopup) {
+                    karooSystem.dispatch(
+                        InRideAlert(
+                            id = "zone-change",
+                            icon = R.drawable.ic_firefly,
+                            title = "$oldZone → $newZone ($reason)",
+                            detail = buildModeDetail(newZone),
+                            autoDismissMs = engine.settings.popupDurationSeconds * 1000L,
+                            backgroundColor = android.R.color.black,
+                            textColor = android.R.color.white,
+                        ),
+                    )
+                }
             }
         }
 
@@ -137,6 +147,18 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                 ant.map { it.copy(connected = connStates[it.id] == "CONNECTED") } + ble
             }.collect { merged ->
                 _discoveredLights.value = merged
+            }
+        }
+
+        // Detect ANT+ lights dropping from CONNECTED to a lost state during a ride
+        extensionScope.launch {
+            lightControl.connectionStates.collect { states ->
+                for ((deviceId, state) in states) {
+                    val prev = antConnPrevState.put(deviceId, state)
+                    if (prev == "CONNECTED" && state != "CONNECTED") {
+                        maybeAlertConnectionLost(deviceId)
+                    }
+                }
             }
         }
 
@@ -166,14 +188,18 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         when (state) {
             is RideState.Recording -> {
                 rideActive = true
+                batteryAlerted.clear()
+                connectionAlertLastTime.clear()
                 engine.onRideStart()
                 startDiscoveryPolling()
+                startBatteryMonitor()
                 updateRadarMonitoring()
             }
             is RideState.Paused -> engine.onRidePause()
             is RideState.Idle -> {
                 rideActive = false
                 stopDiscoveryPolling()
+                stopBatteryMonitor()
                 stopRadarMonitoring()
                 engine.onRideStop()
             }
@@ -259,6 +285,77 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
     private fun stopDiscoveryPolling() {
         discoveryPollingJob?.cancel()
         discoveryPollingJob = null
+    }
+
+    private fun startBatteryMonitor() {
+        if (batteryMonitorJob != null) return
+        batteryMonitorJob = extensionScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(BATTERY_CHECK_INTERVAL_MS)
+                if (!rideActive) continue
+                discoverKarooLights() // refresh ANT+ battery from Karoo's SavedDevices
+                checkBatteryLevels()
+            }
+        }
+    }
+
+    private fun stopBatteryMonitor() {
+        batteryMonitorJob?.cancel()
+        batteryMonitorJob = null
+    }
+
+    private fun checkBatteryLevels() {
+        if (!engine.settings.batteryNotifySound && !engine.settings.batteryNotifyPopup) return
+        val threshold = engine.settings.batteryAlertThreshold
+        val notifyIds = engine.settings.lightAssignments
+            .filter { it.notificationsActive }.map { it.deviceId }.toSet()
+        for (light in discoveredLights.value) {
+            if (light.id !in notifyIds) continue
+            val pct = light.batteryPercent ?: continue
+            if (pct <= threshold && batteryAlerted.add(light.id)) {
+                Timber.d("$TAG: Battery Low alert for ${light.name} ($pct%)")
+                if (engine.settings.batteryNotifyPopup) {
+                    karooSystem.dispatch(
+                        InRideAlert(
+                            id = "battery-low-${light.id}",
+                            icon = R.drawable.ic_firefly,
+                            title = "Battery Low",
+                            detail = "${light.name}: $pct%",
+                            autoDismissMs = engine.settings.popupDurationSeconds * 1000L,
+                            backgroundColor = android.R.color.holo_red_dark,
+                            textColor = android.R.color.white,
+                        ),
+                    )
+                }
+                if (engine.settings.batteryNotifySound) playWarningSound()
+            }
+        }
+    }
+
+    private fun maybeAlertConnectionLost(deviceId: String) {
+        if (!engine.settings.connectionNotifySound && !engine.settings.connectionNotifyPopup) return
+        if (!rideActive) return
+        val assignment = engine.settings.lightAssignments.find { it.deviceId == deviceId } ?: return
+        if (!assignment.notificationsActive) return
+        val now = System.currentTimeMillis()
+        val last = connectionAlertLastTime[deviceId]
+        if (last != null && now - last < CONNECTION_ALERT_COOLDOWN_MS) return
+        connectionAlertLastTime[deviceId] = now
+        Timber.d("$TAG: Light Disconnected alert for ${assignment.deviceName}")
+        if (engine.settings.connectionNotifyPopup) {
+            karooSystem.dispatch(
+                InRideAlert(
+                    id = "conn-lost-$deviceId",
+                    icon = R.drawable.ic_firefly,
+                    title = "Light Disconnected",
+                    detail = assignment.deviceName,
+                    autoDismissMs = engine.settings.popupDurationSeconds * 1000L,
+                    backgroundColor = android.R.color.holo_orange_dark,
+                    textColor = android.R.color.white,
+                ),
+            )
+        }
+        if (engine.settings.connectionNotifySound) playWarningSound()
     }
 
     private fun hasBleAssignments(): Boolean =
@@ -395,6 +492,20 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                     PlayBeepPattern.Tone(frequency = 988, durationMs = 120),
                     PlayBeepPattern.Tone(frequency = null, durationMs = 60),
                     PlayBeepPattern.Tone(frequency = 1319, durationMs = 250),
+                ),
+            ),
+        )
+    }
+
+    private fun playWarningSound() {
+        karooSystem.dispatch(
+            PlayBeepPattern(
+                listOf(
+                    PlayBeepPattern.Tone(frequency = 880, durationMs = 150),
+                    PlayBeepPattern.Tone(frequency = null, durationMs = 60),
+                    PlayBeepPattern.Tone(frequency = 660, durationMs = 150),
+                    PlayBeepPattern.Tone(frequency = null, durationMs = 60),
+                    PlayBeepPattern.Tone(frequency = 440, durationMs = 300),
                 ),
             ),
         )

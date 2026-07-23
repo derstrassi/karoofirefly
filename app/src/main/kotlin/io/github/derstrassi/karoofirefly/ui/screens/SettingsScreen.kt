@@ -79,7 +79,7 @@ fun SettingsScreen(
     var useTimeBased by remember(settings) { mutableStateOf(settings.useTimeBased) }
     var useAmbientLight by remember(settings) { mutableStateOf(settings.useAmbientLight) }
     var nightThreshold by remember(settings) { mutableIntStateOf(settings.ambientNightThreshold) }
-    var zoneNotifications by remember(settings) { mutableStateOf(settings.zoneNotificationsEnabled) }
+    var showNotifications by remember { mutableStateOf(false) }
 
     fun saveSettings() {
         onSave(
@@ -92,9 +92,17 @@ fun SettingsScreen(
                 keepLightsOnAtNightWhilePaused = keepOnAtNight,
                 lightControlMode = LightControlMode.fromFlags(useTimeBased, useAmbientLight).name,
                 ambientNightThreshold = nightThreshold,
-                zoneNotificationsEnabled = zoneNotifications,
             ),
         )
+    }
+
+    if (showNotifications) {
+        NotificationSettingsScreen(
+            settings = settings,
+            onSave = onSave,
+            onBack = { showNotifications = false },
+        )
+        return
     }
 
     Column(
@@ -327,14 +335,25 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Zone change notifications", modifier = Modifier.weight(1f))
-                Switch(checked = zoneNotifications, onCheckedChange = { zoneNotifications = it; saveSettings() })
-            }
+        Spacer(modifier = Modifier.height(8.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showNotifications = true }
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Notifications", modifier = Modifier.weight(1f))
+            Text(
+                "›",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
         HorizontalDivider()

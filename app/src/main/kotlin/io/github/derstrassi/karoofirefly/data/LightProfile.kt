@@ -31,11 +31,16 @@ data class LightAssignment(
     val dayMode: String = "OFF",
     val nightMode: String = "OFF",
     val radarWarnFlash: Boolean = false,
+    val notificationsEnabled: Boolean? = null,
 ) {
     fun modeForZone(zone: DayTimeZone): String = when (zone) {
         DayTimeZone.DAY -> dayMode
         DayTimeZone.NIGHT -> nightMode
     }
+
+    /** Effective notification state: BLE on by default, ANT+ off (Karoo already alerts for ANT+). */
+    val notificationsActive: Boolean
+        get() = notificationsEnabled ?: (protocol == LightProtocol.BLE)
 }
 
 data class LightModeOption(
@@ -112,7 +117,14 @@ data class LightControllerSettings(
     val profile: LightProfile = LightProfile(),
     val lightControlMode: String = "MANUAL_ONLY",
     val ambientNightThreshold: Int = 50,
-    val zoneNotificationsEnabled: Boolean = true,
+    val zoneNotifySound: Boolean = true,
+    val zoneNotifyPopup: Boolean = true,
+    val batteryNotifySound: Boolean = true,
+    val batteryNotifyPopup: Boolean = true,
+    val batteryAlertThreshold: Int = 20,
+    val connectionNotifySound: Boolean = true,
+    val connectionNotifyPopup: Boolean = true,
+    val popupDurationSeconds: Int = 15,
     val lightAssignments: List<LightAssignment> = emptyList(),
 ) {
     val controlMode: LightControlMode
