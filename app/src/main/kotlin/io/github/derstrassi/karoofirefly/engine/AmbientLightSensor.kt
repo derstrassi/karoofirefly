@@ -21,6 +21,7 @@ class AmbientLightSensor(context: Context) : SensorEventListener {
     companion object {
         private const val SMOOTHING_WINDOW_SIZE = 10 // ~2s at ~5Hz sensor rate
         private const val MIN_DWELL_TIME_MS = 10_000L // minimum time before zone can change
+        private const val DAY_LOCKOUT_MS = 120_000L // after switching to NIGHT, block NIGHT→DAY for this long
     }
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -77,10 +78,19 @@ class AmbientLightSensor(context: Context) : SensorEventListener {
         val currentZone = _currentLightZone.value
         val now = System.currentTimeMillis()
 
-        if (newZone != currentZone && (now - lastZoneChangeTime) >= MIN_DWELL_TIME_MS) {
-            Timber.d("AmbientLightSensor: zone change $currentZone → $newZone (lux=$smoothedLux)")
-            _currentLightZone.value = newZone
-            lastZoneChangeTime = now
+        if (newZone != currentZone) {
+            // NIGHT→DAY is held off longer so brief bright patches (e.g. gaps in a
+            // tree-lined avenue) don't flip the zone back; DAY→NIGHT stays responsive.
+            val required = if (currentZone == DayTimeZone.NIGHT && newZone == DayTimeZone.DAY) {
+                DAY_LOCKOUT_MS
+            } else {
+                MIN_DWELL_TIME_MS
+            }
+            if ((now - lastZoneChangeTime) >= required) {
+                Timber.d("AmbientLightSensor: zone change $currentZone → $newZone (lux=$smoothedLux)")
+                _currentLightZone.value = newZone
+                lastZoneChangeTime = now
+            }
         }
     }
 
