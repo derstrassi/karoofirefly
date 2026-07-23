@@ -49,7 +49,7 @@ Controls ANT+ and Bluetooth bike lights from your Karoo. Unlike Karoo's built-in
 Pair your ANT+ lights through **Karoo's native sensor settings** (Settings > Sensors). KarooFireFly discovers them automatically.
 
 ### Magicshine BLE Lights
-KarooFireFly discovers Magicshine lights via Bluetooth when you open the settings. Supported models (M1/M2 series) appear automatically. Tap to configure and the extension connects.
+KarooFireFly discovers Magicshine lights via Bluetooth when you open the settings. Supported models (M1/M2/M3 series) appear automatically. Tap to configure and the extension connects.
 
 ### Light Configuration
 Tap any light in the Connected Lights section to open its detail dialog. Assign a role (Front/Rear), configure Day and Night modes, and use the test buttons to preview. All changes auto-save.

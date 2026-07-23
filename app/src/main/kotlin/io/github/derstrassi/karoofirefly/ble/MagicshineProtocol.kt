@@ -8,7 +8,7 @@ object MagicshineProtocol {
     const val SERVICE_UUID = "0000FFE1-0000-1000-8000-00805f9b34fb"
     const val CHARACTERISTIC_UUID = "0000FFE0-0000-1000-8000-00805f9b34fb"
 
-    val SUPPORTED_NAME_PREFIXES = setOf("M2-B0", "M2-BO", "M1-B0", "M1-BO")
+    val SUPPORTED_NAME_PREFIXES = setOf("M1-", "M2-", "M3-")
 
     const val MODE_STEADY = 1
     const val MODE_SLOW_FLASH = 2
@@ -120,10 +120,13 @@ data class MagicshineDeviceConfig(
         private val BRIGHTNESS_STEPS = listOf(10, 25, 50, 100)
 
         fun forDevice(bleName: String): MagicshineDeviceConfig {
-            val moduleType = if (bleName.startsWith("M2", ignoreCase = true)) {
-                MagicshineModuleType.M2
-            } else {
+            // The digit after "M" is the device's lamp group count; only single-group
+            // devices use the M1 layout. See Magicshine app, FrontBikeLightActivity:580.
+            val lampGroups = bleName.getOrNull(1)?.digitToIntOrNull()
+            val moduleType = if (lampGroups == 1) {
                 MagicshineModuleType.M1
+            } else {
+                MagicshineModuleType.M2
             }
 
             val modes = mutableListOf(LightModeOption("OFF", "Off"))
