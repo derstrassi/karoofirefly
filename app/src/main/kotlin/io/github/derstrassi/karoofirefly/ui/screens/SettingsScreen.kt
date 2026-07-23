@@ -343,7 +343,7 @@ fun SettingsScreen(
         Text("Supported Lights", style = MaterialTheme.typography.titleSmall)
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            "ANT+: Garmin Varia, Bontrager Ion/Flare, Magene L508, and other ANT+ smart bike lights paired through Karoo.\n\nBLE: Magicshine Hori 1300, EVO 1700, and other M1/M2 series lights.",
+            "ANT+: Garmin Varia, Bontrager Ion/Flare, Magene L508, and other ANT+ smart bike lights paired through Karoo.\n\nBLE: Magicshine Hori 1300, EVO 1300, EVO 1700, and other M1/M2/M3 series lights.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

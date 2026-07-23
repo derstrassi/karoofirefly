@@ -21,8 +21,10 @@ Controls ANT+ and Bluetooth bike lights from your Karoo. Unlike Karoo's built-in
 | Magene L508 | ANT+ | ✅ Tested |
 | Garmin Varia RTL 515/516 | ANT+ | ✅ Tested |
 | Magicshine Hori 1300 | BLE | ✅ Tested |
+| Magicshine EVO 1300 | BLE | ✅ Tested |
 | Magicshine EVO 1700 | BLE | ✅ Tested |
 | Garmin Varia UT800 / HL500 | ANT+ | Should work (untested) |
+| Magicshine M1/M2/M3 series | BLE | Should work (auto-detected) |
 | Bontrager Ion / Flare RT | ANT+ | Should work (untested) |
 | Any ANT+ smart bike light | ANT+ | Should work if paired through Karoo |
 
