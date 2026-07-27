@@ -5,6 +5,16 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+fun gitShortSha(): String = try {
+    val process = ProcessBuilder("git", "rev-parse", "--short", "HEAD")
+        .directory(rootDir)
+        .redirectErrorStream(true)
+        .start()
+    process.inputStream.bufferedReader().readText().trim().ifEmpty { "unknown" }
+} catch (e: Exception) {
+    "unknown"
+}
+
 android {
     namespace = "io.github.derstrassi.karoofirefly"
     compileSdk = 35
@@ -15,6 +25,7 @@ android {
         targetSdk = 34
         versionCode = 16
         versionName = "0.5.3"
+        buildConfigField("String", "GIT_SHA", "\"${gitShortSha()}\"")
     }
 
     signingConfigs {

@@ -351,7 +351,7 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            "Version ${BuildConfig.VERSION_NAME}",
+            "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.GIT_SHA})",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
