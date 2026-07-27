@@ -139,6 +139,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Hold the light session only while the UI is actually visible.
+        KarooLightControllerExtension.getInstance()?.setSettingsUiActive(true)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Release the SensorService light claim when the UI leaves the foreground
+        // so Karoo's own light control regains it (unless a ride is active).
+        KarooLightControllerExtension.getInstance()?.setSettingsUiActive(false)
+    }
+
     override fun onDestroy() {
         KarooLightControllerExtension.getInstance()?.setSettingsUiActive(false)
         if (ownsLuxSensor) {

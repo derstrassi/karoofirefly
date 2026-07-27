@@ -140,13 +140,17 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
             }
         }
 
+        // When the SensorService light session becomes ready (we bind lazily on ride/UI),
+        // re-apply the current zone so ANT+ lights catch up despite the async bind.
+        lightControl.onServiceReady = {
+            engine.activeZone.value?.let { zone -> engine.onApplyZone?.invoke(zone) }
+        }
+
         karooSystem.connect { connected ->
             Timber.d("$TAG: Karoo system connected=$connected")
             if (connected) {
-                lightControl.bind()
                 setupConsumers()
                 loadSettings()
-                discoverKarooLights()
             }
         }
     }
@@ -166,6 +170,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         when (state) {
             is RideState.Recording -> {
                 rideActive = true
+                lightControl.bind()
                 engine.onRideStart()
                 startDiscoveryPolling()
                 updateRadarMonitoring()
@@ -176,6 +181,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                 stopDiscoveryPolling()
                 stopRadarMonitoring()
                 engine.onRideStop()
+                if (!settingsUiActive) lightControl.unbind()
             }
         }
     }
@@ -228,10 +234,14 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         Timber.d("$TAG: setSettingsUiActive=$active")
         settingsUiActive = active
         if (active) {
+            lightControl.bind()
             startDiscoveryPolling()
             startBleIfNeeded()
         } else {
-            if (!rideActive) stopDiscoveryPolling()
+            if (!rideActive) {
+                stopDiscoveryPolling()
+                lightControl.unbind()
+            }
             stopBleIfNotNeeded()
         }
     }

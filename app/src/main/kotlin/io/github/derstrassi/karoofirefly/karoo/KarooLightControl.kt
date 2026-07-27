@@ -36,6 +36,7 @@ class KarooLightControl(private val context: Context) : LightController {
     private var lightModeParcelableCreator: ((String) -> Parcelable)? = null
     private var deviceCreator: ((String) -> Parcelable)? = null
     private var isBound = false
+    private var bindRequested = false
 
     private val _connectionStates = MutableStateFlow<Map<String, String>>(emptyMap())
     val connectionStates: StateFlow<Map<String, String>> = _connectionStates
@@ -62,6 +63,7 @@ class KarooLightControl(private val context: Context) : LightController {
             sensorBinder = null
             lightCmdBinder = null
             isBound = false
+            bindRequested = false
             registeredListeners.clear()
             Timber.d("$TAG: Disconnected from SensorService")
         }
@@ -146,7 +148,9 @@ class KarooLightControl(private val context: Context) : LightController {
         }
     }
 
+    /** Binds to Karoo's SensorService to claim the light-command session. Idempotent. */
     fun bind() {
+        if (bindRequested) return
         val intent = Intent().apply {
             component = ComponentName(
                 "io.hammerhead.sensorservice",
@@ -155,20 +159,31 @@ class KarooLightControl(private val context: Context) : LightController {
         }
         try {
             context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+            bindRequested = true
             Timber.d("$TAG: Binding to SensorService")
         } catch (e: Exception) {
             Timber.e(e, "$TAG: Failed to bind")
         }
     }
 
+    /**
+     * Releases the light-command session so Karoo's own light control regains it.
+     * Unbinding drops our SensorService connection, which releases the light-command
+     * binder and our listener registrations on the service side.
+     */
     fun unbind() {
+        if (!bindRequested) return
+        // Best-effort unregister of connection listeners before dropping the connection.
         registeredListeners.toList().forEach { unregisterConnectionState(it) }
-        if (isBound) {
-            try { context.unbindService(serviceConnection) } catch (_: Exception) {}
-            isBound = false
-            sensorBinder = null
-            lightCmdBinder = null
-        }
+        try { context.unbindService(serviceConnection) } catch (_: Exception) {}
+        bindRequested = false
+        isBound = false
+        sensorBinder = null
+        lightCmdBinder = null
+        registeredListeners.clear()
+        pendingRegistrations.clear()
+        pendingLightParamRegistrations.clear()
+        Timber.d("$TAG: Released SensorService light control")
     }
 
     fun setLightMode(deviceId: String, modeName: String): Boolean {
