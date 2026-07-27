@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.derstrassi.karoofirefly.BuildConfig
 import io.github.derstrassi.karoofirefly.DiscoveredLight
 import io.github.derstrassi.karoofirefly.R
 import io.github.derstrassi.karoofirefly.data.DayTimeZone
@@ -367,6 +368,14 @@ fun SettingsScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            "Version ${BuildConfig.VERSION_NAME}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
     }
 }
 
