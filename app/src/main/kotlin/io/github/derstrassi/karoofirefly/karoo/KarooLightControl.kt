@@ -48,14 +48,20 @@ class KarooLightControl(private val context: Context) : LightController {
     private val pendingLightParamRegistrations = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     var onServiceReady: (() -> Unit)? = null
 
+    // Serializes SensorService binder work off the main thread — ServiceConnection
+    // callbacks arrive on the main thread, and these transactions can block.
+    private val serviceExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             sensorBinder = service
             isBound = true
             Timber.d("$TAG: Connected to SensorService")
             if (service != null) {
-                getLightCommandBinder(service)
-                loadLightModeClass()
+                serviceExecutor.execute {
+                    getLightCommandBinder(service)
+                    loadLightModeClass()
+                }
             }
         }
 
@@ -173,8 +179,9 @@ class KarooLightControl(private val context: Context) : LightController {
      */
     fun unbind() {
         if (!bindRequested) return
-        // Best-effort unregister of connection listeners before dropping the connection.
-        registeredListeners.toList().forEach { unregisterConnectionState(it) }
+        // Unbinding drops our SensorService connection, which releases the light-command
+        // binder and our listener registrations service-side — no synchronous unregister
+        // transactions needed (those would block the caller, often the main thread).
         try { context.unbindService(serviceConnection) } catch (_: Exception) {}
         bindRequested = false
         isBound = false
