@@ -23,13 +23,14 @@ Controls ANT+ and Bluetooth bike lights from your Karoo. Unlike Karoo's built-in
 | Magicshine Hori 1300 | BLE | ✅ Tested |
 | Magicshine EVO 1300 | BLE | ✅ Tested |
 | Magicshine EVO 1700 | BLE | ✅ Tested |
+| See.Sense ICON3 | BLE | ✅ Tested |
 | Garmin Varia UT800 / HL500 | ANT+ | Should work (untested) |
 | Magicshine M1/M2/M3 series | BLE | Should work (auto-detected) |
 | Bontrager Ion / Flare RT | ANT+ | Should work (untested) |
 | Any ANT+ smart bike light | ANT+ | Should work if paired through Karoo |
 
 **Features:**
-- **Multi-protocol support** — ANT+ lights via Karoo pairing, Magicshine BLE lights via direct Bluetooth
+- **Multi-protocol support** — ANT+ lights via Karoo pairing, BLE lights (Magicshine, See.Sense) via direct Bluetooth
 - Per-light configuration with protocol-specific modes (tap any light to configure)
 - Independent feature switches: Time-based and Ambient Light Sensor (enable one or both)
 - Automatic light mode switching based on time of day (sunrise/sunset with configurable offsets)
@@ -52,6 +53,9 @@ Pair your ANT+ lights through **Karoo's native sensor settings** (Settings > Sen
 
 ### Magicshine BLE Lights
 KarooFireFly discovers Magicshine lights via Bluetooth when you open the settings. Supported models (M1/M2/M3 series) appear automatically. Tap to configure and the extension connects.
+
+### See.Sense BLE Lights
+See.Sense ICON3 lights (and other models advertising with `F_ICN`/`R_ICN` prefixes) are discovered automatically alongside Magicshine lights. Commands are sent over the Nordic UART service using the same ASCII protocol as the official See.Sense app. Available modes: Off, Flash, Flash Burst, Flash Twin, Flash Pulse, Solid.
 
 ### Light Configuration
 Tap any light in the Connected Lights section to open its detail dialog. Assign a role (Front/Rear), configure Day and Night modes, and use the test buttons to preview. All changes auto-save.
@@ -80,6 +84,8 @@ Each light has its own configuration dialog with:
 **ANT+ modes:** Queried dynamically from each light — only supported modes are shown (e.g. Garmin Varia: Off, Solid, Night Flash, Day Flash; Bontrager Ion: Off, High, Medium, Low, etc.)
 
 **Magicshine modes:** Off, Steady/Flash/SOS at 10%, 25%, 50%, 100%
+
+**See.Sense modes:** Off, Flash, Flash Burst, Flash Twin, Flash Pulse, Solid
 
 ### Light Control
 
@@ -110,7 +116,7 @@ When using an auto mode, BonusButton presses temporarily override the automatic 
 ### Layers
 
 1. **Karoo Integration** (`karoo/`) — SensorService AIDL binding, ANT+ light mode commands, per-device capability queries
-2. **BLE** (`ble/`) — Magicshine BLE scanning, connection, protocol implementation
+2. **BLE** (`ble/`) — Magicshine and See.Sense BLE scanning, connection, protocol implementations
 3. **Light** (`light/`) — `LightController` interface abstracting ANT+ and BLE
 4. **Engine** (`engine/`) — State machine, sunrise/sunset calculation, ambient light sensor
 5. **Data** (`data/`) — DataStore settings, per-light profiles, light assignments
@@ -192,7 +198,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - Extension ID: `karoo-light-controller` (no `.` allowed in karoo-ext IDs)
 - **Disable "Auto Control"** for your ANT+ lights in Karoo's sensor settings (Settings > Sensors > [Light] > Auto Control: Off). Otherwise Karoo's native light control will conflict with KarooFireFly.
 - Pair ANT+ lights through **Karoo's native sensor settings**, not through the extension
-- Magicshine BLE lights are discovered automatically when settings are open or a BLE light is configured
+- BLE lights (Magicshine and See.Sense) are discovered automatically when settings are open or a BLE light is configured
 - BLE connection requires Bluetooth permissions (granted on first launch)
 
 ### Undocumented Karoo API Warning

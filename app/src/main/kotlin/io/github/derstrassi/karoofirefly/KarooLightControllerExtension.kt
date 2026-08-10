@@ -13,6 +13,7 @@ import io.hammerhead.karooext.models.StreamState
 import io.hammerhead.karooext.models.RideState
 import io.hammerhead.karooext.models.SavedDevices
 import io.github.derstrassi.karoofirefly.ble.MagicshineBleController
+import io.github.derstrassi.karoofirefly.ble.SeeSenseBleController
 import io.github.derstrassi.karoofirefly.karoo.KarooLightControl
 import io.github.derstrassi.karoofirefly.data.DayTimeZone
 import io.github.derstrassi.karoofirefly.data.LightProtocol
@@ -64,6 +65,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
     internal lateinit var karooSystem: KarooSystemService
     internal lateinit var lightControl: KarooLightControl
     internal lateinit var magicshineController: MagicshineBleController
+    internal lateinit var seeSenseController: SeeSenseBleController
     private val lightControllers = mutableMapOf<LightProtocol, LightController>()
     internal lateinit var timeController: TimeBasedController
     internal lateinit var ambientLightSensor: AmbientLightSensor
@@ -96,12 +98,16 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         repository = PreferencesRepository(applicationContext)
         lightControl = KarooLightControl(applicationContext)
         magicshineController = MagicshineBleController(applicationContext)
+        seeSenseController = SeeSenseBleController(applicationContext)
         lightControllers[LightProtocol.ANT_PLUS] = lightControl
         lightControllers[LightProtocol.BLE] = magicshineController
-        magicshineController.onDeviceConnected = {
+        lightControllers[LightProtocol.SEE_SENSE] = seeSenseController
+        val onBleDeviceConnected: () -> Unit = {
             stopBleIfNotNeeded()
             engine.activeZone.value?.let { zone -> engine.onApplyZone?.invoke(zone) }
         }
+        magicshineController.onDeviceConnected = onBleDeviceConnected
+        seeSenseController.onDeviceConnected = onBleDeviceConnected
         timeController = TimeBasedController()
         ambientLightSensor = AmbientLightSensor(applicationContext)
         engine = LightControlEngine(timeController, ambientLightSensor)
@@ -131,10 +137,15 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
             }
         }
 
-        // Merge ANT+ and BLE discovered lights
+        // Merge ANT+, Magicshine BLE, and See.Sense BLE discovered lights
         extensionScope.launch {
-            combine(_antLights, magicshineController.discoveredLights, lightControl.connectionStates) { ant, ble, connStates ->
-                ant.map { it.copy(connected = connStates[it.id] == "CONNECTED") } + ble
+            combine(
+                _antLights,
+                magicshineController.discoveredLights,
+                seeSenseController.discoveredLights,
+                lightControl.connectionStates,
+            ) { ant, magicshine, seeSense, connStates ->
+                ant.map { it.copy(connected = connStates[it.id] == "CONNECTED") } + magicshine + seeSense
             }.collect { merged ->
                 _discoveredLights.value = merged
             }
@@ -202,6 +213,10 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
             .filter { it.protocol == LightProtocol.BLE }
             .map { it.deviceId }
             .toSet()
+        seeSenseController.assignedDeviceIds = engine.settings.lightAssignments
+            .filter { it.protocol == LightProtocol.SEE_SENSE }
+            .map { it.deviceId }
+            .toSet()
     }
 
     fun testMode(deviceId: String, modeName: String) {
@@ -216,10 +231,8 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
 
     fun onAssignmentChanged() {
         syncBleAssignments()
-        // Connect newly assigned BLE lights
-        for (id in magicshineController.assignedDeviceIds) {
-            magicshineController.connect(id)
-        }
+        for (id in magicshineController.assignedDeviceIds) magicshineController.connect(id)
+        for (id in seeSenseController.assignedDeviceIds) seeSenseController.connect(id)
         startBleIfNeeded()
         updateRadarMonitoring()
     }
@@ -237,8 +250,10 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
     }
 
     private fun allAssignedBleConnected(): Boolean {
-        val bleAssigned = magicshineController.assignedDeviceIds
-        return bleAssigned.isEmpty() || magicshineController.allConnected(bleAssigned)
+        val msAssigned = magicshineController.assignedDeviceIds
+        val ssAssigned = seeSenseController.assignedDeviceIds
+        return (msAssigned.isEmpty() || magicshineController.allConnected(msAssigned)) &&
+               (ssAssigned.isEmpty() || seeSenseController.allConnected(ssAssigned))
     }
 
     private fun startDiscoveryPolling() {
@@ -262,7 +277,9 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
     }
 
     private fun hasBleAssignments(): Boolean =
-        engine.settings.lightAssignments.any { it.protocol == LightProtocol.BLE }
+        engine.settings.lightAssignments.any {
+            it.protocol == LightProtocol.BLE || it.protocol == LightProtocol.SEE_SENSE
+        }
 
     private fun startBleIfNeeded() {
         Timber.d("$TAG: startBleIfNeeded: settingsUiActive=$settingsUiActive, hasBleAssignments=${hasBleAssignments()}")
@@ -273,6 +290,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                 Timber.d("$TAG: Requesting Bluetooth and starting BLE discovery")
                 karooSystem.dispatch(RequestBluetooth(extension))
                 magicshineController.startDiscovery()
+                seeSenseController.startDiscovery()
             }
         }
     }
@@ -281,9 +299,15 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         if (settingsUiActive) return
         if (!hasBleAssignments()) {
             magicshineController.stopDiscovery()
+            seeSenseController.stopDiscovery()
             karooSystem.dispatch(ReleaseBluetooth(extension))
-        } else if (magicshineController.allConnected(magicshineController.assignedDeviceIds)) {
-            magicshineController.stopDiscovery()
+        } else {
+            if (magicshineController.allConnected(magicshineController.assignedDeviceIds)) {
+                magicshineController.stopDiscovery()
+            }
+            if (seeSenseController.allConnected(seeSenseController.assignedDeviceIds)) {
+                seeSenseController.stopDiscovery()
+            }
         }
     }
 
@@ -450,6 +474,7 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
         stopRadarMonitoring()
         engine.destroy()
         magicshineController.destroy()
+        seeSenseController.destroy()
         lightControl.unbind()
         karooSystem.dispatch(ReleaseBluetooth(extension))
         karooSystem.disconnect()
