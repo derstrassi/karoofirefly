@@ -12,6 +12,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -34,6 +36,8 @@ class MagicshineBleController(context: Context) : LightController {
         private const val TAG = "MagicshineBle"
         private const val WRITE_RETRIES = 5
         private const val WRITE_RETRY_DELAY_MS = 60L
+        private const val RECONNECT_MIN_MS = 10_000L
+        private const val RECONNECT_MAX_MS = 60_000L
     }
 
     private val appContext = context.applicationContext
@@ -116,14 +120,13 @@ class MagicshineBleController(context: Context) : LightController {
         Timber.d("$TAG: Device config for $name: module=${deviceConfigs[address]?.moduleType}")
         updateDiscoveredLights()
         if (address in assignedDeviceIds) {
-            connectToPeripheral(address, peripheral)
+            startConnectionSupervisor(address)
         }
     }
 
     fun connect(address: String) {
-        val device = devices[address] ?: return
         if (characteristics.containsKey(address)) return
-        connectToPeripheral(address, device.peripheral)
+        startConnectionSupervisor(address)
     }
 
     fun stopDiscovery() {
@@ -137,93 +140,106 @@ class MagicshineBleController(context: Context) : LightController {
         scanCallback = null
     }
 
-    private fun connectToPeripheral(address: String, peripheral: Peripheral) {
-        connectionJobs[address]?.cancel()
+    /**
+     * Keeps an assigned light connected: retries as long as it is assigned and not
+     * connected, so a light that drops (out of range / powered off) reconnects by
+     * itself once it is reachable again — without needing the scanner to be running.
+     */
+    private fun startConnectionSupervisor(address: String) {
+        if (connectionJobs[address]?.isActive == true) return
         connectionJobs[address] = scope.launch {
-            try {
-                Timber.d("$TAG: Connecting to $address")
-                val options = CentralManager.ConnectionOptions.Direct(
-                    timeout = 8.seconds,
-                    retry = 2,
-                    retryDelay = 1.seconds,
-                )
-                centralManager.connect(peripheral, options)
+            var backoff = RECONNECT_MIN_MS
+            while (isActive && address in assignedDeviceIds) {
+                val wasConnected = attemptConnect(address)
+                backoff = if (wasConnected) RECONNECT_MIN_MS else minOf(backoff * 2, RECONNECT_MAX_MS)
+                delay(backoff)
+            }
+        }
+    }
 
-                var connected = false
-                withTimeoutOrNull(10_000) {
-                    peripheral.state.collect { state ->
-                        if (state is ConnectionState.Connected) {
-                            connected = true
-                            return@collect
-                        }
-                    }
-                }
+    /**
+     * One connection lifecycle. Returns true if it was connected (then it blocks until the
+     * light disconnects and the supervisor retries quickly), false if the attempt failed
+     * (the supervisor backs off before the next try).
+     */
+    private suspend fun attemptConnect(address: String): Boolean {
+        val peripheral = devices[address]?.peripheral
+            ?: centralManager.getPeripheralsById(listOf(address)).firstOrNull()
+            ?: return false
+        return try {
+            Timber.d("$TAG: Connecting to $address")
+            val options = CentralManager.ConnectionOptions.Direct(
+                timeout = 8.seconds,
+                retry = 2,
+                retryDelay = 1.seconds,
+            )
+            centralManager.connect(peripheral, options)
 
-                if (!connected) {
-                    Timber.w("$TAG: Connection timeout for $address")
-                    return@launch
-                }
+            val connected = withTimeoutOrNull(10_000) {
+                peripheral.state.first { it is ConnectionState.Connected }
+                true
+            } ?: false
+            if (!connected) {
+                Timber.w("$TAG: Connection timeout for $address")
+                return false
+            }
 
-                var characteristic: RemoteCharacteristic? = null
-                for (attempt in 1..10) {
-                    try {
-                        val services = peripheral.services().value
-                        val service = services.firstOrNull { it.uuid == targetService }
-                        characteristic = service?.characteristics?.firstOrNull { it.uuid == targetChar }
-                        if (characteristic != null) break
-                    } catch (_: Exception) { }
-                    delay(360)
-                }
+            val characteristic = findTargetCharacteristic(peripheral)
+            if (characteristic == null) {
+                Timber.w("$TAG: Characteristic not found for $address")
+                return false
+            }
+            characteristics[address] = characteristic
+            Timber.d("$TAG: Connected to $address, characteristic found")
 
-                if (characteristic != null) {
-                    characteristics[address] = characteristic
-                    Timber.d("$TAG: Connected to $address, characteristic found")
+            scope.launch {
+                try {
+                    characteristic.subscribe().collect { data -> parseNotification(address, data) }
+                } catch (_: Exception) { }
+            }
 
-                    scope.launch {
-                        try {
-                            characteristic.subscribe().collect { data ->
-                                parseNotification(address, data)
-                            }
-                        } catch (_: Exception) { }
-                    }
+            delay(180)
+            writeBytes(address, MagicshineProtocol.buildQuery(0xA4.toByte()))
+            delay(100)
+            writeBytes(address, MagicshineProtocol.buildQuery(0xA1.toByte()))
 
-                    delay(180)
+            updateDiscoveredLights()
+            onDeviceConnected?.invoke()
+
+            scope.launch {
+                while (characteristics.containsKey(address)) {
+                    delay(60_000)
+                    if (!characteristics.containsKey(address)) break
                     writeBytes(address, MagicshineProtocol.buildQuery(0xA4.toByte()))
                     delay(100)
                     writeBytes(address, MagicshineProtocol.buildQuery(0xA1.toByte()))
-
-                    updateDiscoveredLights()
-                    onDeviceConnected?.invoke()
-
-                    scope.launch {
-                        while (characteristics.containsKey(address)) {
-                            delay(60_000)
-                            if (!characteristics.containsKey(address)) break
-                            writeBytes(address, MagicshineProtocol.buildQuery(0xA4.toByte()))
-                            delay(100)
-                            writeBytes(address, MagicshineProtocol.buildQuery(0xA1.toByte()))
-                        }
-                    }
-                } else {
-                    Timber.w("$TAG: Characteristic not found for $address")
                 }
-
-                peripheral.state.collect { state ->
-                    if (state is ConnectionState.Disconnected) {
-                        Timber.d("$TAG: Disconnected from $address, will reconnect")
-                        characteristics.remove(address)
-                        delay(5000)
-                        val device = devices[address]
-                        if (device != null) {
-                            connectToPeripheral(address, device.peripheral)
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "$TAG: Connection error for $address")
-                characteristics.remove(address)
             }
+
+            // Stay here until the light disconnects, then let the supervisor reconnect.
+            peripheral.state.first { it is ConnectionState.Disconnected }
+            Timber.d("$TAG: Disconnected from $address")
+            true
+        } catch (e: Exception) {
+            Timber.w(e, "$TAG: Connect attempt failed for $address")
+            false
+        } finally {
+            characteristics.remove(address)
+            updateDiscoveredLights()
         }
+    }
+
+    private suspend fun findTargetCharacteristic(peripheral: Peripheral): RemoteCharacteristic? {
+        for (attempt in 1..10) {
+            try {
+                val services = peripheral.services().value
+                val service = services.firstOrNull { it.uuid == targetService }
+                val characteristic = service?.characteristics?.firstOrNull { it.uuid == targetChar }
+                if (characteristic != null) return characteristic
+            } catch (_: Exception) { }
+            delay(360)
+        }
+        return null
     }
 
     override fun setMode(deviceId: String, modeName: String) {
