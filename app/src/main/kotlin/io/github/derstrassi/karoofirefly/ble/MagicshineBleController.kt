@@ -12,7 +12,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -58,41 +57,66 @@ class MagicshineBleController(context: Context) : LightController {
 
     var onDeviceConnected: (() -> Unit)? = null
 
-    private var scanJob: Job? = null
+    private var scanCallback: android.bluetooth.le.ScanCallback? = null
     private val connectionJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
+
+    private val bleScanner: android.bluetooth.le.BluetoothLeScanner?
+        get() = (appContext.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager)
+            ?.adapter?.bluetoothLeScanner
 
     var assignedDeviceIds: Set<String> = emptySet()
 
     fun startDiscovery() {
-        if (scanJob != null) return
+        if (scanCallback != null) return
+        val scanner = bleScanner ?: run {
+            Timber.w("$TAG: No BLE scanner available")
+            return
+        }
         Timber.d("$TAG: Starting BLE discovery")
-        scanJob = scope.launch {
-            try {
-                centralManager.scan { }
-                    .catch { e -> Timber.e(e, "$TAG: BLE scan flow error") }
-                    .collect { result ->
-                        try {
-                            val name = result.advertisingData.name ?: return@collect
-                            val address = result.peripheral.address
-                            if (MagicshineProtocol.SUPPORTED_NAME_PREFIXES.any { name.startsWith(it, ignoreCase = true) }) {
-                                if (!devices.containsKey(address)) {
-                                    Timber.d("$TAG: Found Magicshine: $name ($address)")
-                                    devices[address] = BleDevice(result.peripheral, name)
-                                    deviceConfigs[address] = MagicshineDeviceConfig.forDevice(name)
-                                    Timber.d("$TAG: Device config for $name: module=${deviceConfigs[address]?.moduleType}")
-                                    updateDiscoveredLights()
-                                    if (address in assignedDeviceIds) {
-                                        connectToPeripheral(address, result.peripheral)
-                                    }
-                                }
-                            }
-                        } catch (e: Exception) {
-                            Timber.w(e, "$TAG: Skipping malformed scan result")
-                        }
+        // Raw Android scan: read only the advertised device name. This avoids the Nordic
+        // library's advertisement parser, which crashes on malformed 128-bit UUID data.
+        val callback = object : android.bluetooth.le.ScanCallback() {
+            override fun onScanResult(callbackType: Int, result: android.bluetooth.le.ScanResult) {
+                try {
+                    val name = result.scanRecord?.deviceName ?: return
+                    val address = result.device?.address ?: return
+                    if (devices.containsKey(address)) return
+                    if (MagicshineProtocol.SUPPORTED_NAME_PREFIXES.any { name.startsWith(it, ignoreCase = true) }) {
+                        Timber.d("$TAG: Found Magicshine: $name ($address)")
+                        scope.launch { registerFoundDevice(address, name) }
                     }
-            } catch (e: Exception) {
-                Timber.e(e, "$TAG: BLE scan error")
+                } catch (e: Exception) {
+                    Timber.w(e, "$TAG: Skipping scan result")
+                }
             }
+
+            override fun onScanFailed(errorCode: Int) {
+                Timber.e("$TAG: BLE scan failed: $errorCode")
+            }
+        }
+        try {
+            val settings = android.bluetooth.le.ScanSettings.Builder()
+                .setScanMode(android.bluetooth.le.ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .build()
+            scanner.startScan(null, settings, callback)
+            scanCallback = callback
+        } catch (e: Exception) {
+            Timber.e(e, "$TAG: Failed to start BLE scan")
+        }
+    }
+
+    private fun registerFoundDevice(address: String, name: String) {
+        if (devices.containsKey(address)) return
+        val peripheral = centralManager.getPeripheralsById(listOf(address)).firstOrNull() ?: run {
+            Timber.w("$TAG: No peripheral for $address")
+            return
+        }
+        devices[address] = BleDevice(peripheral, name)
+        deviceConfigs[address] = MagicshineDeviceConfig.forDevice(name)
+        Timber.d("$TAG: Device config for $name: module=${deviceConfigs[address]?.moduleType}")
+        updateDiscoveredLights()
+        if (address in assignedDeviceIds) {
+            connectToPeripheral(address, peripheral)
         }
     }
 
@@ -103,8 +127,14 @@ class MagicshineBleController(context: Context) : LightController {
     }
 
     fun stopDiscovery() {
-        scanJob?.cancel()
-        scanJob = null
+        scanCallback?.let { cb ->
+            try {
+                bleScanner?.stopScan(cb)
+            } catch (e: Exception) {
+                Timber.w(e, "$TAG: Failed to stop BLE scan")
+            }
+        }
+        scanCallback = null
     }
 
     private fun connectToPeripheral(address: String, peripheral: Peripheral) {
