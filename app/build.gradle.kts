@@ -36,7 +36,7 @@ android {
         minSdk = 23
         targetSdk = 34
         versionCode = gitCommitCount()
-        versionName = "0.5.4-beta2"
+        versionName = "0.5.4-beta3"
         buildConfigField("String", "GIT_SHA", "\"${gitShortSha()}\"")
     }
 
