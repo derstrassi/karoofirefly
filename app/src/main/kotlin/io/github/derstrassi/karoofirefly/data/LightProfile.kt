@@ -20,7 +20,7 @@ enum class DayTimeZone {
 enum class LightRole { FRONT, REAR }
 
 @Serializable
-enum class LightProtocol { ANT_PLUS, BLE }
+enum class LightProtocol { ANT_PLUS, BLE, SEE_SENSE }
 
 @Serializable
 data class LightAssignment(
@@ -83,6 +83,7 @@ fun modeProviderFor(protocol: LightProtocol, deviceId: String? = null): LightMod
             )
         }
     }
+    LightProtocol.SEE_SENSE -> io.github.derstrassi.karoofirefly.ble.SeeSenseModeProvider()
 }
 
 enum class LightControlMode {

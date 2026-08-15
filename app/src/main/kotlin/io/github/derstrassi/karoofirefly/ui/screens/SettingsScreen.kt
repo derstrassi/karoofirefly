@@ -364,7 +364,7 @@ fun SettingsScreen(
 private fun ProtocolBadge(protocol: LightProtocol) {
     val badgeShape = RoundedCornerShape(4.dp)
     when (protocol) {
-        LightProtocol.BLE -> {
+        LightProtocol.BLE, LightProtocol.SEE_SENSE -> {
             Row(
                 modifier = Modifier
                     .background(Color(0xFF1565C0), badgeShape)
