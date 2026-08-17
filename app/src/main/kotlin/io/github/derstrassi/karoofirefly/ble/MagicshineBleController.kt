@@ -99,6 +99,10 @@ class MagicshineBleController(context: Context) : LightController {
             }
         }
         try {
+            // The scanner only runs while the settings UI is open (to discover new lights the
+            // user is about to add), so a fast, short-lived LOW_LATENCY scan is fine here.
+            // Assigned lights are (re)connected directly by address, not via this scan, so the
+            // scanner never runs for a whole ride and its power draw is not a concern.
             val settings = android.bluetooth.le.ScanSettings.Builder()
                 .setScanMode(android.bluetooth.le.ScanSettings.SCAN_MODE_LOW_LATENCY)
                 .build()
@@ -166,6 +170,13 @@ class MagicshineBleController(context: Context) : LightController {
         val peripheral = devices[address]?.peripheral
             ?: centralManager.getPeripheralsById(listOf(address)).firstOrNull()
             ?: return false
+        // Connecting by address without a prior scan: make sure we have a device entry and a
+        // command config derived from the (bonded) name, so setMode works afterwards.
+        val name = devices[address]?.name ?: peripheral.name
+        if (name != null) {
+            devices.putIfAbsent(address, BleDevice(peripheral, name))
+            deviceConfigs.putIfAbsent(address, MagicshineDeviceConfig.forDevice(name))
+        }
         return try {
             Timber.d("$TAG: Connecting to $address")
             val options = CentralManager.ConnectionOptions.Direct(

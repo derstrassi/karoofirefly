@@ -173,6 +173,9 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
                 lightControl.bind()
                 engine.onRideStart()
                 startDiscoveryPolling()
+                // (Re)arm BLE for the ride so an assigned light that isn't connected yet
+                // gets discovered and connected mid-ride, not just at extension startup.
+                startBleIfNeeded()
                 updateRadarMonitoring()
             }
             is RideState.Paused -> engine.onRidePause()
@@ -280,9 +283,24 @@ class KarooLightControllerExtension : KarooExtension("karoo-light-controller", B
             bleStartJob?.cancel()
             bleStartJob = extensionScope.launch {
                 kotlinx.coroutines.delay(2000)
-                Timber.d("$TAG: Requesting Bluetooth and starting BLE discovery")
+                // Always hold Bluetooth while a BLE light is assigned so the supervisor can
+                // reconnect a known light without a scan. Only run the scanner when a light
+                // still needs discovering (or the settings UI is open), otherwise it would
+                // scan for the whole ride even though everything is already connected.
                 karooSystem.dispatch(RequestBluetooth(extension))
-                magicshineController.startDiscovery()
+                // Assigned lights connect directly by their bonded address. This works even
+                // when the light is on but idle and no longer advertising (Magicshine stops
+                // advertising when idle), which scan-based discovery cannot handle — and it
+                // needs no scanner, so there is no scan battery cost during a ride.
+                for (id in magicshineController.assignedDeviceIds) {
+                    magicshineController.connect(id)
+                }
+                // The scanner is only needed to discover NEW, not-yet-assigned lights, so run
+                // it only while the settings UI is open — never for a whole ride.
+                if (settingsUiActive) {
+                    Timber.d("$TAG: Starting BLE discovery")
+                    magicshineController.startDiscovery()
+                }
             }
         }
     }
