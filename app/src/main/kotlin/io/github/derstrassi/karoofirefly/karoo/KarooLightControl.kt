@@ -23,16 +23,37 @@ class KarooLightControl(private val context: Context) : LightController {
         private const val SENSOR_DESCRIPTOR = "io.hammerhead.sensorservice.SensorServiceAIDL"
         private const val LIGHT_CMD_DESCRIPTOR = "io.hammerhead.sensorservice.LightCommandConnectionAIDL"
         private const val LISTENER_DESCRIPTOR = "io.hammerhead.aidlrx.IParcelableListener"
+
+        // LightCommandConnectionAIDL transaction codes (unchanged so far across firmware versions).
         private const val TX_REGISTER_LIGHT_PARAMS = 1
         private const val TX_UNREGISTER_LIGHT_PARAMS = 2
         private const val TX_SET_LIGHT_MODE = 3
-        private const val TX_REGISTER_DEVICE_CONNECTION = 6
-        private const val TX_UNREGISTER_DEVICE_CONNECTION = 7
-        private const val TX_GET_LIGHT_CMD = 17
+
+        // SensorServiceAIDL transaction codes as they were before Karoo OS 1.663.2548 (15 Oct 2026).
+        // That release inserted getLowBatteryInfo() in the middle of the interface, which shifted
+        // every later method by +1 (getLightCommand 17 -> 18, register/unregisterDeviceConnection
+        // 6/7 -> 7/8). These are therefore only base values: the real codes are resolved at runtime
+        // in resolveSensorServiceTransactions() by probing for the LightCommand binder.
+        private const val BASE_TX_REGISTER_DEVICE_CONNECTION = 6
+        private const val BASE_TX_UNREGISTER_DEVICE_CONNECTION = 7
+        private const val BASE_TX_GET_LIGHT_CMD = 17
+
+        // Shifts to probe, most likely first: +1 (Karoo OS 1.663+), 0 (older firmware, Karoo 2),
+        // then a little headroom for future insertions.
+        private val TX_SHIFT_CANDIDATES = listOf(1, 0, 2, 3)
+
+        private const val PREFS_NAME = "karoo_light_control"
+        private const val PREF_TX_SHIFT = "sensor_service_tx_shift"
     }
 
     private var sensorBinder: IBinder? = null
-    private var lightCmdBinder: IBinder? = null
+    @Volatile private var lightCmdBinder: IBinder? = null
+
+    // Resolved per firmware by resolveSensorServiceTransactions(); null until the probe succeeds.
+    @Volatile private var txRegisterDeviceConnection: Int? = null
+    @Volatile private var txUnregisterDeviceConnection: Int? = null
+
+    private val prefs by lazy { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
     private var lightModeParcelableCreator: ((String) -> Parcelable)? = null
     private var deviceCreator: ((String) -> Parcelable)? = null
     private var isBound = false
@@ -59,7 +80,7 @@ class KarooLightControl(private val context: Context) : LightController {
             Timber.d("$TAG: Connected to SensorService")
             if (service != null) {
                 serviceExecutor.execute {
-                    getLightCommandBinder(service)
+                    resolveSensorServiceTransactions(service)
                     loadLightModeClass()
                 }
             }
@@ -68,6 +89,8 @@ class KarooLightControl(private val context: Context) : LightController {
         override fun onServiceDisconnected(name: ComponentName?) {
             sensorBinder = null
             lightCmdBinder = null
+            txRegisterDeviceConnection = null
+            txUnregisterDeviceConnection = null
             isBound = false
             bindRequested = false
             registeredListeners.clear()
@@ -75,17 +98,72 @@ class KarooLightControl(private val context: Context) : LightController {
         }
     }
 
-    private fun getLightCommandBinder(service: IBinder) {
+    /**
+     * Resolves the SensorServiceAIDL transaction codes for the running firmware and fetches
+     * the LightCommandConnection binder.
+     *
+     * The codes are not stable across Karoo OS releases: 1.663.2548 added a method in the
+     * middle of the interface and shifted everything after it by +1, which made the previously
+     * hard-coded codes call the wrong methods. So instead of trusting a constant, call
+     * getLightCommand() at a few candidate codes and accept the first reply whose binder
+     * identifies itself as LightCommandConnectionAIDL. The register/unregisterDeviceConnection
+     * codes sit at a fixed distance from getLightCommand() and follow the same shift.
+     *
+     * The last working shift is cached so the usual case costs a single transaction.
+     */
+    private fun resolveSensorServiceTransactions(service: IBinder) {
+        lightCmdBinder = null
+        txRegisterDeviceConnection = null
+        txUnregisterDeviceConnection = null
+
+        val cachedShift = prefs.getInt(PREF_TX_SHIFT, -1).takeIf { it >= 0 }
+        val candidates = (listOfNotNull(cachedShift) + TX_SHIFT_CANDIDATES).distinct()
+        for (shift in candidates) {
+            val code = BASE_TX_GET_LIGHT_CMD + shift
+            val binder = probeLightCommandBinder(service, code) ?: continue
+            lightCmdBinder = binder
+            txRegisterDeviceConnection = BASE_TX_REGISTER_DEVICE_CONNECTION + shift
+            txUnregisterDeviceConnection = BASE_TX_UNREGISTER_DEVICE_CONNECTION + shift
+            if (cachedShift != shift) prefs.edit().putInt(PREF_TX_SHIFT, shift).apply()
+            Timber.i(
+                "$TAG: SensorService transaction shift=$shift " +
+                    "(getLightCommand=$code, registerDeviceConnection=$txRegisterDeviceConnection), " +
+                    "got LightCommand binder: $binder",
+            )
+            return
+        }
+        Timber.e(
+            "$TAG: getLightCommand() not found on SensorService (probed shifts $candidates). " +
+                "Unsupported Karoo firmware — ANT+ light control unavailable",
+        )
+    }
+
+    /**
+     * Calls transaction [code] on the SensorService as if it were getLightCommand() and returns
+     * the reply binder only if it really is a LightCommandConnectionAIDL. Anything else — an
+     * unhandled code, an exception from a method that expected arguments, or a binder for a
+     * different interface — yields null.
+     */
+    private fun probeLightCommandBinder(service: IBinder, code: Int): IBinder? {
         val data = Parcel.obtain()
         val reply = Parcel.obtain()
         try {
             data.writeInterfaceToken(SENSOR_DESCRIPTOR)
-            service.transact(TX_GET_LIGHT_CMD, data, reply, 0)
+            if (!service.transact(code, data, reply, 0)) {
+                Timber.d("$TAG: TX $code not handled by SensorService")
+                return null
+            }
             reply.readException()
-            lightCmdBinder = reply.readStrongBinder()
-            Timber.d("$TAG: Got LightCommand binder: $lightCmdBinder")
+            val binder = reply.readStrongBinder() ?: return null
+            val descriptor = binder.interfaceDescriptor
+            if (descriptor != LIGHT_CMD_DESCRIPTOR) {
+                Timber.d("$TAG: TX $code returned a $descriptor binder, not LightCommandConnection")
+                return null
+            }
+            return binder
         } catch (e: Exception) {
-            Timber.e(e, "$TAG: Failed to get LightCommand binder")
+            Timber.d("$TAG: TX $code is not getLightCommand(): ${e.javaClass.simpleName}: ${e.message}")
+            return null
         } finally {
             data.recycle()
             reply.recycle()
@@ -343,7 +421,8 @@ class KarooLightControl(private val context: Context) : LightController {
     fun registerConnectionState(deviceId: String) {
         val binder = sensorBinder
         val creator = deviceCreator
-        if (binder == null || creator == null) {
+        val txRegister = txRegisterDeviceConnection
+        if (binder == null || creator == null || txRegister == null) {
             pendingRegistrations.add(deviceId)
             return
         }
@@ -400,7 +479,7 @@ class KarooLightControl(private val context: Context) : LightController {
             callData.writeInt(1)
             device.writeToParcel(callData, 0)
             callData.writeStrongBinder(listenerBinder)
-            binder.transact(6, callData, callReply, 0)
+            binder.transact(txRegister, callData, callReply, 0)
             callReply.readException()
             registeredListeners.add(listenerId)
             Timber.d("$TAG: Registered connection state listener for $deviceId")
@@ -414,6 +493,7 @@ class KarooLightControl(private val context: Context) : LightController {
 
     fun unregisterConnectionState(deviceId: String) {
         val binder = sensorBinder ?: return
+        val txUnregister = txUnregisterDeviceConnection ?: return
         val listenerId = if (deviceId.startsWith("light-conn-")) deviceId else "light-conn-$deviceId"
         if (listenerId !in registeredListeners) return
 
@@ -422,7 +502,7 @@ class KarooLightControl(private val context: Context) : LightController {
         try {
             data.writeInterfaceToken(SENSOR_DESCRIPTOR)
             data.writeString(listenerId)
-            binder.transact(7, data, reply, 0)
+            binder.transact(txUnregister, data, reply, 0)
             reply.readException()
             registeredListeners.remove(listenerId)
         } catch (e: Exception) {
